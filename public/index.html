@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Clan ZZZ Voice - Secure Gaming Voice Chat</title>
+  <title>Clan ZZZ Chat - Secure Gaming Voice Chat</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -960,6 +960,14 @@
     // UI Logic
     const voiceChat = new VoiceChat();
     let isJoining = false;
+    
+    // Check for room in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomFromUrl = urlParams.get('room');
+    if (roomFromUrl) {
+      document.getElementById('roomId').value = roomFromUrl;
+      document.getElementById('roomId').readOnly = true;
+    }
     
     // Focus username input on load
     document.getElementById('username').focus();
