@@ -564,7 +564,7 @@
           
           <div class="section-divider">or</div>
           
-          <!-- Private Room and Join Button - Side by Side -->
+          <!-- Private Room Input and Join Button Row -->
           <div class="input-row" id="roomInputGroup">
             <div>
               <label for="roomId">Create Private Room</label>
@@ -576,8 +576,8 @@
                 autocomplete="off"
               >
             </div>
-            <div>
-              <label style="opacity: 0; pointer-events: none;">Join</label>
+            <div style="display: flex; flex-direction: column;">
+              <label style="opacity: 0; user-select: none; pointer-events: none;">.</label>
               <button id="joinBtn">Join Voice Chat</button>
             </div>
           </div>
@@ -1325,17 +1325,16 @@
       
       // Only clear room ID, keep nickname
       document.getElementById('roomId').value = '';
-        
-        // Reset mute button
-        const micBtn = document.getElementById('micBtn');
-        micBtn.innerHTML = '<span class="icon">🎤</span><span>Mute</span>';
-        micBtn.classList.remove('muted');
-        
-        // Reset join button
-        const joinBtn = document.getElementById('joinBtn');
-        joinBtn.disabled = false;
-        joinBtn.innerHTML = 'Join Voice Chat';
-      }
+      
+      // Reset mute button
+      const micBtn = document.getElementById('micBtn');
+      micBtn.innerHTML = '<span class="icon">🎤</span><span>Mute</span>';
+      micBtn.classList.remove('muted');
+      
+      // Reset join button
+      const joinBtn = document.getElementById('joinBtn');
+      joinBtn.disabled = false;
+      joinBtn.innerHTML = 'Join Voice Chat';
     });
     
     // Change room button handler
