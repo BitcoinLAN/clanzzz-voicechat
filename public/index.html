@@ -824,26 +824,28 @@
             { urls: 'stun:stun2.l.google.com:19302' },
             { urls: 'stun:stun3.l.google.com:19302' },
             { urls: 'stun:stun4.l.google.com:19302' },
-            // Additional public STUN servers
-            { urls: 'stun:stun.relay.metered.ca:80' },
-            // Free public TURN servers (metered.ca provides free tier)
+            // Cloudflare STUN
+            { urls: 'stun:stun.cloudflare.com:3478' },
+            // Open Relay TURN servers (free public)
             {
-              urls: 'turn:standard.relay.metered.ca:80',
+              urls: 'turn:openrelay.metered.ca:80',
               username: 'openrelayproject',
               credential: 'openrelayproject'
             },
             {
-              urls: 'turn:standard.relay.metered.ca:443',
+              urls: 'turn:openrelay.metered.ca:443',
               username: 'openrelayproject',
               credential: 'openrelayproject'
             },
             {
-              urls: 'turn:standard.relay.metered.ca:443?transport=tcp',
+              urls: 'turn:openrelay.metered.ca:443?transport=tcp',
               username: 'openrelayproject',
               credential: 'openrelayproject'
             }
           ],
-          iceCandidatePoolSize: 10
+          iceCandidatePoolSize: 10,
+          bundlePolicy: 'max-bundle',
+          rtcpMuxPolicy: 'require'
         });
         
         // Add local stream with encryption
@@ -877,15 +879,23 @@
           console.log(`ICE connection state with ${username}: ${pc.iceConnectionState}`);
           if (pc.iceConnectionState === 'failed') {
             console.error(`ICE connection failed with ${username}, attempting restart`);
+            // Try to restart ICE instead of immediately disconnecting
             pc.restartIce();
+          } else if (pc.iceConnectionState === 'disconnected') {
+            // Don't immediately remove on disconnect, wait for it to reconnect or fail
+            console.warn(`ICE disconnected with ${username}, waiting for reconnection...`);
           }
         };
         
         // Handle connection state
         pc.onconnectionstatechange = () => {
           console.log(`Connection state with ${username}: ${pc.connectionState}`);
-          if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          // Only remove peer if connection permanently failed, not just disconnected
+          if (pc.connectionState === 'failed') {
+            console.error(`Peer connection permanently failed with ${username}`);
             this.removePeer(userId);
+          } else if (pc.connectionState === 'connected') {
+            console.log(`Successfully connected to ${username}`);
           }
         };
         
@@ -1035,7 +1045,9 @@
           
           const checkAudioLevel = () => {
             if (!this.peers.has(userId)) {
-              audioContext.close();
+              if (audioContext.state !== 'closed') {
+                audioContext.close().catch(err => console.log('AudioContext already closed'));
+              }
               return;
             }
             
@@ -1074,10 +1086,10 @@
           peer.pc.close();
           this.peers.delete(userId);
           
-          // Close audio context
+          // Close audio context safely
           const audioContext = this.audioContexts.get(userId);
-          if (audioContext) {
-            audioContext.close();
+          if (audioContext && audioContext.state !== 'closed') {
+            audioContext.close().catch(err => console.log('AudioContext already closed'));
             this.audioContexts.delete(userId);
           }
           
