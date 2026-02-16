@@ -499,7 +499,9 @@
 
     <main class="main-content">
       <div class="card">
+        <!-- Join View -->
         <div class="view active" id="joinView">
+          <!-- Nickname and Mic Row -->
           <div class="input-row">
             <div>
               <label for="username">Nickname</label>
@@ -519,6 +521,7 @@
             </div>
           </div>
           
+          <!-- Public Rooms Section -->
           <div class="section-divider">Public Rooms</div>
           
           <div class="public-rooms-grid" id="publicRoomsList">
@@ -561,6 +564,7 @@
           
           <div class="section-divider">or</div>
           
+          <!-- Private Room and Join Button - Side by Side -->
           <div class="input-row" id="roomInputGroup">
             <div>
               <label for="roomId">Create Private Room</label>
@@ -589,6 +593,7 @@
           </div>
         </div>
         
+        <!-- Chat View -->
         <div class="view" id="chatView">
           <div class="status-bar">
             <div class="status-indicator">
@@ -635,7 +640,6 @@
         this.audioContexts = new Map();
         this.selectedMicId = null;
         this.isFromDirectLink = false;
-        this.isMuted = false;
       }
       
       generateId() {
@@ -1322,15 +1326,16 @@
       // Only clear room ID, keep nickname
       document.getElementById('roomId').value = '';
         
-      // Reset mute button
-      const micBtn = document.getElementById('micBtn');
-      micBtn.innerHTML = '<span class="icon">🎤</span><span>Mute</span>';
-      micBtn.classList.remove('muted');
+        // Reset mute button
+        const micBtn = document.getElementById('micBtn');
+        micBtn.innerHTML = '<span class="icon">🎤</span><span>Mute</span>';
+        micBtn.classList.remove('muted');
         
-      // Reset join button
-      const joinBtn = document.getElementById('joinBtn');
-      joinBtn.disabled = false;
-      joinBtn.innerHTML = 'Join Voice Chat';
+        // Reset join button
+        const joinBtn = document.getElementById('joinBtn');
+        joinBtn.disabled = false;
+        joinBtn.innerHTML = 'Join Voice Chat';
+      }
     });
     
     // Change room button handler
