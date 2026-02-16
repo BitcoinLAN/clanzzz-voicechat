@@ -818,10 +818,32 @@
       async createPeerConnection(userId, username, isInitiator) {
         const pc = new RTCPeerConnection({
           iceServers: [
+            // Google STUN servers
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' }
-          ]
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            // Additional public STUN servers
+            { urls: 'stun:stun.relay.metered.ca:80' },
+            // Free public TURN servers (metered.ca provides free tier)
+            {
+              urls: 'turn:standard.relay.metered.ca:80',
+              username: 'openrelayproject',
+              credential: 'openrelayproject'
+            },
+            {
+              urls: 'turn:standard.relay.metered.ca:443',
+              username: 'openrelayproject',
+              credential: 'openrelayproject'
+            },
+            {
+              urls: 'turn:standard.relay.metered.ca:443?transport=tcp',
+              username: 'openrelayproject',
+              credential: 'openrelayproject'
+            }
+          ],
+          iceCandidatePoolSize: 10
         });
         
         // Add local stream with encryption
@@ -842,6 +864,20 @@
               targetId: userId,
               candidate: event.candidate
             }));
+          }
+        };
+        
+        // Monitor ICE gathering state
+        pc.onicegatheringstatechange = () => {
+          console.log(`ICE gathering state with ${username}: ${pc.iceGatheringState}`);
+        };
+        
+        // Monitor ICE connection state
+        pc.oniceconnectionstatechange = () => {
+          console.log(`ICE connection state with ${username}: ${pc.iceConnectionState}`);
+          if (pc.iceConnectionState === 'failed') {
+            console.error(`ICE connection failed with ${username}, attempting restart`);
+            pc.restartIce();
           }
         };
         
