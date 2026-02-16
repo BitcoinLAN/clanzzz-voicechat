@@ -547,7 +547,7 @@
       font-family: 'JetBrains Mono', monospace;
       font-weight: 600;
       font-size: 0.9rem;
-      color: var(--accent-primary);
+      color: var(--text-primary);
       min-width: 1.5rem;
       text-align: center;
     }
@@ -805,7 +805,6 @@
         this.audioContexts = new Map();
         this.selectedMicId = null;
         this.isFromDirectLink = false;
-        this.activeRooms = [];
       }
       
       generateId() {
@@ -1181,42 +1180,6 @@
         userCount.textContent = this.peers.size + 1;
       }
       
-      updateRoomsList() {
-        const roomsList = document.getElementById('roomsList');
-        const noRooms = document.getElementById('noRooms');
-        
-        if (!roomsList) return;
-        
-        if (this.activeRooms.length === 0) {
-          roomsList.style.display = 'none';
-          noRooms.style.display = 'block';
-          return;
-        }
-        
-        roomsList.style.display = 'flex';
-        noRooms.style.display = 'none';
-        roomsList.innerHTML = '';
-        
-        this.activeRooms.forEach(room => {
-          const roomCard = document.createElement('div');
-          roomCard.className = 'room-card';
-          roomCard.onclick = () => {
-            document.getElementById('roomId').value = room.id;
-            document.getElementById('username').focus();
-          };
-          
-          roomCard.innerHTML = `
-            <div class="room-info-left">
-              <div class="room-name">${this.escapeHtml(room.id)}</div>
-              <div class="room-users">${room.users.map(u => this.escapeHtml(u)).join(', ')}</div>
-            </div>
-            <div class="room-count">${room.userCount}</div>
-          `;
-          
-          roomsList.appendChild(roomCard);
-        });
-      }
-      
       createUserItem(userId, username) {
         const initial = username.charAt(0).toUpperCase();
         return `
@@ -1393,18 +1356,7 @@
       const roomInputGroup = document.getElementById('roomInputGroup');
       roomInputGroup.style.display = 'none';
       document.getElementById('changeRoomBtn').style.display = 'block';
-      // Hide room browser when using direct link
-      document.getElementById('roomsBrowser').style.display = 'none';
     }
-    
-    // Refresh rooms button
-    document.getElementById('refreshRoomsBtn').addEventListener('click', () => {
-      if (lobbyWs && lobbyWs.readyState === WebSocket.OPEN) {
-        lobbyWs.send(JSON.stringify({ type: 'get-rooms' }));
-      } else {
-        connectLobby();
-      }
-    });
     
     // Focus username input on load
     document.getElementById('username').focus();
