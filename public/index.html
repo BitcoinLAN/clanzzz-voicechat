@@ -211,16 +211,14 @@
     
     .public-room-item {
       display: flex;
-      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 1rem 0.75rem;
+      justify-content: space-between;
+      padding: 1rem;
       background: var(--white);
       border: 1px solid var(--gray-border);
       border-radius: 12px;
       cursor: pointer;
       transition: all 0.2s ease;
-      text-align: center;
     }
     
     .public-room-item:hover {
@@ -233,17 +231,11 @@
       transform: translateY(0);
     }
     
-    .room-icon {
-      font-size: 1.5rem;
-      margin-bottom: 0.5rem;
-    }
-    
     .room-name {
       font-weight: 600;
       font-size: 0.9375rem;
       color: var(--text-primary);
       letter-spacing: -0.01em;
-      margin-bottom: 0.375rem;
     }
     
     .room-count {
@@ -333,6 +325,53 @@
     /* Users */
     .users-section {
       margin-bottom: 1.5rem;
+    }
+    
+    /* Share Section */
+    .share-section {
+      margin-bottom: 1.5rem;
+    }
+    
+    .share-url-box {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    
+    .share-url-input {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      background: var(--gray-light-bg);
+      border: 1px solid var(--gray-border);
+      border-radius: 10px;
+      font-size: 0.875rem;
+      color: var(--text-primary);
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+    
+    .copy-btn {
+      padding: 0.75rem 1.25rem;
+      background: var(--white);
+      color: var(--text-primary);
+      border: 1px solid var(--gray-border);
+      border-radius: 10px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: none;
+      width: auto;
+    }
+    
+    .copy-btn:hover {
+      background: var(--gray-light-bg);
+      transform: none;
+    }
+    
+    .copy-btn.copied {
+      background: #34c759;
+      color: white;
+      border-color: #34c759;
     }
     
     .section-header {
@@ -532,7 +571,6 @@
           
           <div class="public-rooms-grid" id="publicRoomsList">
             <div class="public-room-item" data-room="lounge">
-              <span class="room-icon">💬</span>
               <span class="room-name">Lounge</span>
               <div class="room-count">
                 <span class="user-icon">👤</span>
@@ -541,7 +579,6 @@
             </div>
             
             <div class="public-room-item" data-room="counter-strike">
-              <span class="room-icon">🔫</span>
               <span class="room-name">Counter-Strike</span>
               <div class="room-count">
                 <span class="user-icon">👤</span>
@@ -550,7 +587,6 @@
             </div>
             
             <div class="public-room-item" data-room="league-of-legends">
-              <span class="room-icon">⚔️</span>
               <span class="room-name">League of Legends</span>
               <div class="room-count">
                 <span class="user-icon">👤</span>
@@ -559,7 +595,6 @@
             </div>
             
             <div class="public-room-item" data-room="empire-earth">
-              <span class="room-icon">🏛️</span>
               <span class="room-name">Empire Earth</span>
               <div class="room-count">
                 <span class="user-icon">👤</span>
@@ -573,7 +608,7 @@
           <!-- Private Room Input and Join Button Row -->
           <div class="input-row" id="roomInputGroup">
             <div>
-              <label for="roomId">Create Private Room</label>
+              <label for="roomId">Create or Join a Private Room</label>
               <input 
                 type="text" 
                 id="roomId" 
@@ -584,7 +619,7 @@
             </div>
             <div style="display: flex; flex-direction: column;">
               <label style="opacity: 0; user-select: none; pointer-events: none;">.</label>
-              <button id="joinBtn">Join Voice Chat</button>
+              <button id="joinBtn">Join Room</button>
             </div>
           </div>
           
@@ -618,6 +653,17 @@
               <span class="user-count" id="userCount">1</span>
             </div>
             <div class="users-list" id="usersList"></div>
+          </div>
+          
+          <!-- Share URL Section -->
+          <div class="share-section">
+            <div class="section-header">
+              <span class="section-title">Share Room</span>
+            </div>
+            <div class="share-url-box">
+              <input type="text" id="shareUrl" readonly class="share-url-input">
+              <button id="copyUrlBtn" class="copy-btn">Copy</button>
+            </div>
           </div>
           
           <div class="controls">
@@ -1307,9 +1353,12 @@
         document.getElementById('joinView').classList.remove('active');
         document.getElementById('chatView').classList.add('active');
         
+        // Populate share URL (uses window.location.origin so it works on any domain)
+        const shareUrl = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(roomId)}`;
+        document.getElementById('shareUrl').value = shareUrl;
+        
         // Update URL with actual room name
         if (!roomFromUrl) {
-          const shareUrl = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(roomId)}`;
           window.history.replaceState({}, '', shareUrl);
         }
       } else {
@@ -1330,6 +1379,28 @@
       } else {
         btn.innerHTML = '<span class="icon">🎤</span><span>Mute</span>';
         btn.classList.remove('muted');
+      }
+    });
+    
+    // Copy URL button handler
+    document.getElementById('copyUrlBtn').addEventListener('click', async () => {
+      const shareUrlInput = document.getElementById('shareUrl');
+      const copyBtn = document.getElementById('copyUrlBtn');
+      
+      try {
+        await navigator.clipboard.writeText(shareUrlInput.value);
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy';
+        }, 2000);
+      } catch (err) {
+        // Fallback for older browsers
+        shareUrlInput.select();
+        document.execCommand('copy');
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy';
+        }, 2000);
       }
     });
     
