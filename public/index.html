@@ -146,8 +146,8 @@
     button {
       width: 100%;
       padding: 1rem 1.5rem;
-      background: var(--blue);
-      color: var(--white);
+      background: #000000;
+      color: #ffffff;
       border: none;
       border-radius: 12px;
       font-size: 1.0625rem;
@@ -155,14 +155,14 @@
       cursor: pointer;
       letter-spacing: -0.01em;
       font-family: inherit;
-      box-shadow: 0 4px 12px rgba(0, 113, 227, 0.25);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
       transition: all 0.2s ease;
     }
     
     button:hover {
-      background: #0077ED;
+      background: #1a1a1a;
       transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(0, 113, 227, 0.3);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
     }
     
     button:active {
@@ -564,19 +564,23 @@
           
           <div class="section-divider">or</div>
           
-          <!-- Private Room -->
-          <div class="input-group" id="roomInputGroup">
-            <label for="roomId">Create Private Room</label>
-            <input 
-              type="text" 
-              id="roomId" 
-              placeholder="Enter room name"
-              maxlength="30"
-              autocomplete="off"
-            >
+          <!-- Private Room and Join Button - Side by Side -->
+          <div class="input-row" id="roomInputGroup">
+            <div>
+              <label for="roomId">Create Private Room</label>
+              <input 
+                type="text" 
+                id="roomId" 
+                placeholder="Enter room name"
+                maxlength="30"
+                autocomplete="off"
+              >
+            </div>
+            <div>
+              <label style="opacity: 0; pointer-events: none;">Join</label>
+              <button id="joinBtn">Join Voice Chat</button>
+            </div>
           </div>
-          
-          <button id="joinBtn">Join Voice Chat</button>
           
           <button id="changeRoomBtn" class="secondary" style="display: none; margin-top: 0.75rem;">Change Room</button>
           
@@ -1307,21 +1311,20 @@
     });
     
     document.getElementById('leaveBtn').addEventListener('click', () => {
-      if (confirm('Leave voice chat?')) {
-        voiceChat.leave();
-        document.getElementById('chatView').classList.remove('active');
-        document.getElementById('joinView').classList.add('active');
-        
-        // Always clear URL when leaving
-        window.history.replaceState({}, '', window.location.pathname);
-        
-        // Reconnect to lobby
-        if (!voiceChat.isFromDirectLink) {
-          connectLobby();
-        }
-        
-        // Only clear room ID, keep nickname
-        document.getElementById('roomId').value = '';
+      voiceChat.leave();
+      document.getElementById('chatView').classList.remove('active');
+      document.getElementById('joinView').classList.add('active');
+      
+      // Always clear URL when leaving
+      window.history.replaceState({}, '', window.location.pathname);
+      
+      // Reconnect to lobby
+      if (!voiceChat.isFromDirectLink) {
+        connectLobby();
+      }
+      
+      // Only clear room ID, keep nickname
+      document.getElementById('roomId').value = '';
         
         // Reset mute button
         const micBtn = document.getElementById('micBtn');
@@ -1331,54 +1334,52 @@
         // Reset join button
         const joinBtn = document.getElementById('joinBtn');
         joinBtn.disabled = false;
-        joinBtn.innerHTML = '<span class="icon">🎮</span> Join Voice Chat';
+        joinBtn.innerHTML = 'Join Voice Chat';
       }
     });
     
     // Change room button handler
     document.getElementById('changeRoomBtn').addEventListener('click', () => {
-      if (confirm('Leave current room and join a different one?')) {
-        voiceChat.leave();
-        
-        // Show room input and public rooms
-        const roomInputGroup = document.getElementById('roomInputGroup');
-        roomInputGroup.style.display = 'block';
-        document.getElementById('changeRoomBtn').style.display = 'none';
-        voiceChat.isFromDirectLink = false;
-        
-        // Show public rooms section
-        const publicRoomsGrid = document.getElementById('publicRoomsList');
-        if (publicRoomsGrid) {
-          publicRoomsGrid.style.display = 'grid';
-        }
-        // Show section dividers
-        document.querySelectorAll('.section-divider').forEach(divider => {
-          divider.style.display = 'block';
-        });
-        
-        // Clear URL parameter
-        window.history.replaceState({}, '', window.location.pathname);
-        
-        // Reconnect to lobby
-        connectLobby();
-        
-        // Go back to join view
-        document.getElementById('chatView').classList.remove('active');
-        document.getElementById('joinView').classList.add('active');
-        
-        // Reset buttons
-        const micBtn = document.getElementById('micBtn');
-        micBtn.innerHTML = '<span class="icon">🎤</span><span>Mute</span>';
-        micBtn.classList.remove('muted');
-        
-        const joinBtn = document.getElementById('joinBtn');
-        joinBtn.disabled = false;
-        joinBtn.innerHTML = '<span class="icon">🎮</span> Join Voice Chat';
-        
-        // Clear room input and focus username
-        document.getElementById('roomId').value = '';
-        document.getElementById('username').focus();
+      voiceChat.leave();
+      
+      // Show room input and public rooms
+      const roomInputGroup = document.getElementById('roomInputGroup');
+      roomInputGroup.style.display = 'block';
+      document.getElementById('changeRoomBtn').style.display = 'none';
+      voiceChat.isFromDirectLink = false;
+      
+      // Show public rooms section
+      const publicRoomsGrid = document.getElementById('publicRoomsList');
+      if (publicRoomsGrid) {
+        publicRoomsGrid.style.display = 'grid';
       }
+      // Show section dividers
+      document.querySelectorAll('.section-divider').forEach(divider => {
+        divider.style.display = 'block';
+      });
+      
+      // Clear URL parameter
+      window.history.replaceState({}, '', window.location.pathname);
+      
+      // Reconnect to lobby
+      connectLobby();
+      
+      // Go back to join view
+      document.getElementById('chatView').classList.remove('active');
+      document.getElementById('joinView').classList.add('active');
+      
+      // Reset buttons
+      const micBtn = document.getElementById('micBtn');
+      micBtn.innerHTML = '<span class="icon">🎤</span><span>Mute</span>';
+      micBtn.classList.remove('muted');
+      
+      const joinBtn = document.getElementById('joinBtn');
+      joinBtn.disabled = false;
+      joinBtn.innerHTML = 'Join Voice Chat';
+      
+      // Clear room input and focus username
+      document.getElementById('roomId').value = '';
+      document.getElementById('username').focus();
     });
     
     // Prevent accidental page close
