@@ -1164,6 +1164,16 @@
       const roomInputGroup = document.getElementById('roomInputGroup');
       roomInputGroup.style.display = 'none';
       document.getElementById('changeRoomBtn').style.display = 'block';
+      
+      // Hide public rooms section when using direct link
+      const publicRoomsGrid = document.getElementById('publicRoomsList');
+      if (publicRoomsGrid) {
+        publicRoomsGrid.style.display = 'none';
+      }
+      // Hide all section dividers
+      document.querySelectorAll('.section-divider').forEach(divider => {
+        divider.style.display = 'none';
+      });
     }
     
     // Focus username input on load
@@ -1306,6 +1316,9 @@
         document.getElementById('chatView').classList.remove('active');
         document.getElementById('joinView').classList.add('active');
         
+        // Always clear URL when leaving
+        window.history.replaceState({}, '', window.location.pathname);
+        
         // Reconnect to lobby
         if (!voiceChat.isFromDirectLink) {
           connectLobby();
@@ -1313,9 +1326,6 @@
         
         // Only clear room ID, keep nickname
         document.getElementById('roomId').value = '';
-        if (!voiceChat.isFromDirectLink) {
-          window.history.replaceState({}, '', window.location.pathname);
-        }
         
         // Reset mute button
         const micBtn = document.getElementById('micBtn');
@@ -1334,14 +1344,27 @@
       if (confirm('Leave current room and join a different one?')) {
         voiceChat.leave();
         
-        // Show room input
+        // Show room input and public rooms
         const roomInputGroup = document.getElementById('roomInputGroup');
         roomInputGroup.style.display = 'block';
         document.getElementById('changeRoomBtn').style.display = 'none';
         voiceChat.isFromDirectLink = false;
         
+        // Show public rooms section
+        const publicRoomsGrid = document.getElementById('publicRoomsList');
+        if (publicRoomsGrid) {
+          publicRoomsGrid.style.display = 'grid';
+        }
+        // Show section dividers
+        document.querySelectorAll('.section-divider').forEach(divider => {
+          divider.style.display = 'block';
+        });
+        
         // Clear URL parameter
         window.history.replaceState({}, '', window.location.pathname);
+        
+        // Reconnect to lobby
+        connectLobby();
         
         // Go back to join view
         document.getElementById('chatView').classList.remove('active');
@@ -1356,8 +1379,9 @@
         joinBtn.disabled = false;
         joinBtn.innerHTML = '<span class="icon">🎮</span> Join Voice Chat';
         
-        // Focus room input
-        document.getElementById('roomId').focus();
+        // Clear room input and focus username
+        document.getElementById('roomId').value = '';
+        document.getElementById('username').focus();
       }
     });
     
