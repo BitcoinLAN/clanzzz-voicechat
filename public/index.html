@@ -156,7 +156,7 @@
       letter-spacing: 0.05em;
     }
     
-    input {
+    input, select {
       width: 100%;
       padding: 1rem 1.25rem;
       background: var(--bg-light);
@@ -168,7 +168,21 @@
       transition: all 0.2s ease;
     }
     
-    input:focus {
+    select {
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b92b8' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 1rem center;
+      padding-right: 3rem;
+    }
+    
+    select option {
+      background: var(--bg-medium);
+      color: var(--text-primary);
+    }
+    
+    input:focus, select:focus {
       outline: none;
       border-color: var(--accent-primary);
       box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.1);
@@ -493,7 +507,7 @@
             >
           </div>
           
-          <div class="input-group">
+          <div class="input-group" id="roomInputGroup">
             <label for="roomId">Room ID</label>
             <input 
               type="text" 
@@ -502,6 +516,13 @@
               maxlength="30"
               autocomplete="off"
             >
+          </div>
+          
+          <div class="input-group">
+            <label for="micSelect">Microphone</label>
+            <select id="micSelect">
+              <option value="">Default Microphone</option>
+            </select>
           </div>
           
           <button id="joinBtn">
@@ -546,6 +567,11 @@
               <span>Leave</span>
             </button>
           </div>
+          
+          <button class="control-btn secondary" id="changeRoomBtn" style="margin-top: 1rem; display: none;">
+            <span class="icon">🔄</span>
+            <span>Change Room</span>
+          </button>
         </div>
       </div>
     </main>
@@ -560,35 +586,55 @@
         this.userId = this.generateId();
         this.username = '';
         this.roomId = '';
+        this.displayRoomId = '';
         this.isMuted = false;
         this.audioContexts = new Map();
+        this.selectedMicId = null;
+        this.isFromDirectLink = false;
       }
       
       generateId() {
         return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
       }
       
-      async init(username, roomId) {
+      generateRoomId() {
+        // Generate 6-digit numeric room ID
+        return Math.floor(100000 + Math.random() * 900000).toString();
+      }
+      
+      async init(username, roomId, displayRoomId, micDeviceId = null) {
         this.username = username;
         this.roomId = roomId;
+        this.displayRoomId = displayRoomId || roomId;
+        this.selectedMicId = micDeviceId;
         
         try {
           // Get microphone access with optimized settings
-          this.localStream = await navigator.mediaDevices.getUserMedia({ 
+          const constraints = {
             audio: {
               echoCancellation: true,
               noiseSuppression: true,
               autoGainControl: true,
               sampleRate: 48000,
               channelCount: 1
-            } 
-          });
+            }
+          };
+          
+          // Add device ID if selected
+          if (micDeviceId) {
+            constraints.audio.deviceId = { exact: micDeviceId };
+          }
+          
+          this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
           
           // Connect to signaling server
           this.connectWebSocket();
           
           // Setup audio level monitoring
           this.setupAudioMonitoring();
+          
+          // Handle screen wake/sleep to restart audio monitoring
+          this.setupVisibilityHandling();
           
           return true;
         } catch (error) {
@@ -786,7 +832,12 @@
           
           const dataArray = new Uint8Array(analyser.frequencyBinCount);
           
+          this.localAudioContext = audioContext;
+          this.localAnalyser = analyser;
+          
           const checkAudioLevel = () => {
+            if (!this.localStream) return;
+            
             analyser.getByteFrequencyData(dataArray);
             const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
             
@@ -799,15 +850,29 @@
               }
             }
             
-            if (this.localStream) {
-              requestAnimationFrame(checkAudioLevel);
-            }
+            requestAnimationFrame(checkAudioLevel);
           };
           
           checkAudioLevel();
         } catch (error) {
           console.error('Error setting up audio monitoring:', error);
         }
+      }
+      
+      setupVisibilityHandling() {
+        // Fix for screen lock/wake - restart audio monitoring
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden && this.localStream) {
+            // Screen woke up - restart audio monitoring
+            setTimeout(() => {
+              if (this.localAudioContext && this.localAudioContext.state === 'suspended') {
+                this.localAudioContext.resume();
+              }
+              // Force refresh of user list to restart animations
+              this.updateUsersList();
+            }, 100);
+          }
+        });
       }
       
       monitorRemoteAudio(userId, stream) {
@@ -926,7 +991,7 @@
         
         if (isConnected) {
           statusDot.classList.add('connected');
-          roomInfo.textContent = `Room: ${this.roomId}`;
+          roomInfo.textContent = `Room: ${this.displayRoomId}`;
         } else {
           statusDot.classList.remove('connected');
         }
@@ -948,12 +1013,18 @@
           context.close();
         });
         
+        if (this.localAudioContext) {
+          this.localAudioContext.close();
+        }
+        
         if (this.localStream) {
           this.localStream.getTracks().forEach(track => track.stop());
+          this.localStream = null;
         }
         
         this.peers.clear();
         this.audioContexts.clear();
+        this.isMuted = false;
       }
     }
     
@@ -961,12 +1032,46 @@
     const voiceChat = new VoiceChat();
     let isJoining = false;
     
-    // Check for room in URL
+    // Populate microphone list
+    async function loadMicrophones() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(device => device.kind === 'audioinput');
+        const micSelect = document.getElementById('micSelect');
+        
+        micSelect.innerHTML = '<option value="">Default Microphone</option>';
+        
+        audioInputs.forEach(device => {
+          const option = document.createElement('option');
+          option.value = device.deviceId;
+          option.textContent = device.label || `Microphone ${micSelect.options.length}`;
+          micSelect.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Error loading microphones:', error);
+      }
+    }
+    
+    // Request mic permission first to get device labels
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(stream => {
+        stream.getTracks().forEach(track => track.stop());
+        loadMicrophones();
+      })
+      .catch(() => {
+        // Permission denied, load anyway
+        loadMicrophones();
+      });
+    
+    // Check for room in URL - support both text and numeric IDs
     const urlParams = new URLSearchParams(window.location.search);
-    const roomFromUrl = urlParams.get('room');
+    const roomFromUrl = urlParams.get('room') || urlParams.get('id');
+    
     if (roomFromUrl) {
-      document.getElementById('roomId').value = roomFromUrl;
-      document.getElementById('roomId').readOnly = true;
+      voiceChat.isFromDirectLink = true;
+      const roomInputGroup = document.getElementById('roomInputGroup');
+      roomInputGroup.style.display = 'none';
+      document.getElementById('changeRoomBtn').style.display = 'block';
     }
     
     // Focus username input on load
@@ -985,10 +1090,21 @@
       if (isJoining) return;
       
       const username = document.getElementById('username').value.trim();
-      const roomId = document.getElementById('roomId').value.trim().toLowerCase();
+      let roomInput = document.getElementById('roomId').value.trim().toLowerCase();
+      const micDeviceId = document.getElementById('micSelect').value;
       
-      if (!username || !roomId) {
-        alert('⚠️ Please enter both username and room ID');
+      // Use URL room if from direct link
+      if (roomFromUrl) {
+        roomInput = roomFromUrl;
+      }
+      
+      if (!username) {
+        alert('⚠️ Please enter a username');
+        return;
+      }
+      
+      if (!roomInput && !roomFromUrl) {
+        alert('⚠️ Please enter a room ID');
         return;
       }
       
@@ -997,21 +1113,38 @@
         return;
       }
       
-      if (roomId.length < 3) {
-        alert('⚠️ Room ID must be at least 3 characters');
-        return;
-      }
-      
       isJoining = true;
       const btn = document.getElementById('joinBtn');
       btn.disabled = true;
       btn.innerHTML = '<span class="loading"></span> Connecting...';
       
-      const success = await voiceChat.init(username, roomId);
+      // Generate numeric room ID for backend, keep display name
+      const displayRoomId = roomInput;
+      const internalRoomId = voiceChat.generateRoomId();
+      
+      // If it's a custom text room, hash it to a number for consistency
+      let finalRoomId = internalRoomId;
+      if (roomInput) {
+        // Simple hash of room name to number
+        let hash = 0;
+        for (let i = 0; i < roomInput.length; i++) {
+          hash = ((hash << 5) - hash) + roomInput.charCodeAt(i);
+          hash = hash & hash;
+        }
+        finalRoomId = Math.abs(hash).toString();
+      }
+      
+      const success = await voiceChat.init(username, finalRoomId, displayRoomId, micDeviceId);
       
       if (success) {
         document.getElementById('joinView').classList.remove('active');
         document.getElementById('chatView').classList.add('active');
+        
+        // Update URL if not from direct link
+        if (!roomFromUrl) {
+          const shareUrl = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(finalRoomId)}`;
+          window.history.replaceState({}, '', shareUrl);
+        }
       } else {
         btn.disabled = false;
         btn.innerHTML = '<span class="icon">🎮</span> Join Voice Chat';
@@ -1038,13 +1171,58 @@
         voiceChat.leave();
         document.getElementById('chatView').classList.remove('active');
         document.getElementById('joinView').classList.add('active');
-        document.getElementById('username').value = '';
-        document.getElementById('roomId').value = '';
+        
+        // Reset form if not from direct link
+        if (!voiceChat.isFromDirectLink) {
+          document.getElementById('username').value = '';
+          document.getElementById('roomId').value = '';
+          window.history.replaceState({}, '', window.location.pathname);
+        } else {
+          // Keep username for rejoining
+          document.getElementById('roomId').value = '';
+        }
         
         // Reset mute button
         const micBtn = document.getElementById('micBtn');
         micBtn.innerHTML = '<span class="icon">🎤</span><span>Mute</span>';
         micBtn.classList.remove('muted');
+        
+        // Reset join button
+        const joinBtn = document.getElementById('joinBtn');
+        joinBtn.disabled = false;
+        joinBtn.innerHTML = '<span class="icon">🎮</span> Join Voice Chat';
+      }
+    });
+    
+    // Change room button handler
+    document.getElementById('changeRoomBtn').addEventListener('click', () => {
+      if (confirm('Leave current room and join a different one?')) {
+        voiceChat.leave();
+        
+        // Show room input
+        const roomInputGroup = document.getElementById('roomInputGroup');
+        roomInputGroup.style.display = 'block';
+        document.getElementById('changeRoomBtn').style.display = 'none';
+        voiceChat.isFromDirectLink = false;
+        
+        // Clear URL parameter
+        window.history.replaceState({}, '', window.location.pathname);
+        
+        // Go back to join view
+        document.getElementById('chatView').classList.remove('active');
+        document.getElementById('joinView').classList.add('active');
+        
+        // Reset buttons
+        const micBtn = document.getElementById('micBtn');
+        micBtn.innerHTML = '<span class="icon">🎤</span><span>Mute</span>';
+        micBtn.classList.remove('muted');
+        
+        const joinBtn = document.getElementById('joinBtn');
+        joinBtn.disabled = false;
+        joinBtn.innerHTML = '<span class="icon">🎮</span> Join Voice Chat';
+        
+        // Focus room input
+        document.getElementById('roomId').focus();
       }
     });
     
