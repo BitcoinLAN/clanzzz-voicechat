@@ -659,6 +659,8 @@
             username: this.username
           }));
           this.updateStatus('Connected', true);
+          // Immediately show yourself in the user list
+          this.updateUsersList();
         };
         
         this.ws.onmessage = (event) => {
@@ -949,6 +951,8 @@
         const usersList = document.getElementById('usersList');
         const userCount = document.getElementById('userCount');
         
+        if (!usersList || !userCount) return;
+        
         usersList.innerHTML = '';
         
         // Add self
@@ -959,6 +963,7 @@
           usersList.innerHTML += this.createUserItem(userId, peer.username);
         });
         
+        // Update count: self + peers
         userCount.textContent = this.peers.size + 1;
       }
       
