@@ -10,6 +10,29 @@ const wss = new WebSocket.Server({ server });
 // Store connected clients and rooms
 const rooms = new Map();
 
+// Public rooms that we track
+const PUBLIC_ROOMS = ['lounge', 'gaming-1', 'gaming-2'];
+
+// Broadcast room counts to all waiting clients
+function broadcastRoomCounts() {
+  const counts = {};
+  PUBLIC_ROOMS.forEach(roomId => {
+    const room = rooms.get(roomId);
+    counts[roomId] = room ? room.size : 0;
+  });
+  
+  // Broadcast to all clients
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN && !client.roomId) {
+      // Only send to clients not yet in a room (on lobby page)
+      client.send(JSON.stringify({
+        type: 'room-counts',
+        counts: counts
+      }));
+    }
+  });
+}
+
 // Serve static files
 app.use(express.static('public'));
 
@@ -61,6 +84,9 @@ wss.on('connection', (ws) => {
   ws.on('error', (error) => {
     console.error('WebSocket error:', error);
   });
+  
+  // Send initial room counts
+  broadcastRoomCounts();
 });
 
 // Heartbeat to detect broken connections
@@ -113,6 +139,11 @@ function handleJoin(ws, data) {
   }, userId);
   
   console.log(`User ${username} joined room ${roomId} (${room.size} users total)`);
+  
+  // Broadcast updated room counts if it's a public room
+  if (PUBLIC_ROOMS.includes(roomId)) {
+    broadcastRoomCounts();
+  }
 }
 
 function handleSignaling(ws, data) {
@@ -146,6 +177,11 @@ function handleLeave(ws) {
           type: 'user-left',
           userId: ws.userId
         });
+      }
+      
+      // Broadcast updated room counts if it was a public room
+      if (PUBLIC_ROOMS.includes(ws.roomId)) {
+        broadcastRoomCounts();
       }
     }
   }
