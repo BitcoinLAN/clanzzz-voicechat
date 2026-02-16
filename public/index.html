@@ -501,6 +501,12 @@
       <div class="card">
         <!-- Join View -->
         <div class="view active" id="joinView">
+          <!-- Invitation message for direct links -->
+          <div id="invitationMessage" style="display: none; margin-bottom: 1.5rem; padding: 1rem; background: var(--gray-light-bg); border-radius: 12px; text-align: center;">
+            <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">You have been invited to</div>
+            <div id="invitedRoomName" style="font-size: 1.125rem; font-weight: 600; color: var(--text-primary);"></div>
+          </div>
+          
           <!-- Nickname and Mic Row -->
           <div class="input-row">
             <div>
@@ -581,6 +587,9 @@
               <button id="joinBtn">Join Voice Chat</button>
             </div>
           </div>
+          
+          <!-- Join Room button for direct links -->
+          <button id="joinRoomBtn" style="display: none; margin-top: 0.75rem;">Join Room</button>
           
           <button id="changeRoomBtn" class="secondary" style="display: none; margin-top: 0.75rem;">Change Room</button>
           
@@ -1157,12 +1166,21 @@
     
     // Check for room in URL - support both text and numeric IDs
     const urlParams = new URLSearchParams(window.location.search);
-    const roomFromUrl = urlParams.get('room') || urlParams.get('id');
+    let roomFromUrl = urlParams.get('room') || urlParams.get('id');
     
     if (roomFromUrl) {
       voiceChat.isFromDirectLink = true;
       const roomInputGroup = document.getElementById('roomInputGroup');
       roomInputGroup.style.display = 'none';
+      
+      // Show invitation message with room name
+      const invitationMessage = document.getElementById('invitationMessage');
+      const invitedRoomName = document.getElementById('invitedRoomName');
+      invitationMessage.style.display = 'block';
+      invitedRoomName.textContent = roomFromUrl.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + ' room';
+      
+      // Show Join Room button and Change Room button
+      document.getElementById('joinRoomBtn').style.display = 'block';
       document.getElementById('changeRoomBtn').style.display = 'block';
       
       // Hide public rooms section when using direct link
@@ -1229,6 +1247,11 @@
     
     document.getElementById('roomId').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') document.getElementById('joinBtn').click();
+    });
+    
+    // Join Room button click handler (for direct links)
+    document.getElementById('joinRoomBtn').addEventListener('click', () => {
+      document.getElementById('joinBtn').click();
     });
     
     document.getElementById('joinBtn').addEventListener('click', async () => {
@@ -1318,6 +1341,37 @@
       // Always clear URL when leaving
       window.history.replaceState({}, '', window.location.pathname);
       
+      // Fix Bug 1: Clear roomFromUrl variable
+      roomFromUrl = null;
+      
+      // Fix Bug 3: Restore full UI when leaving from direct link
+      if (voiceChat.isFromDirectLink) {
+        voiceChat.isFromDirectLink = false;
+        
+        // Hide invitation message
+        document.getElementById('invitationMessage').style.display = 'none';
+        
+        // Hide Join Room button
+        document.getElementById('joinRoomBtn').style.display = 'none';
+        
+        // Hide Change Room button
+        document.getElementById('changeRoomBtn').style.display = 'none';
+        
+        // Show room input group
+        document.getElementById('roomInputGroup').style.display = 'grid';
+        
+        // Show public rooms
+        const publicRoomsGrid = document.getElementById('publicRoomsList');
+        if (publicRoomsGrid) {
+          publicRoomsGrid.style.display = 'grid';
+        }
+        
+        // Show section dividers
+        document.querySelectorAll('.section-divider').forEach(divider => {
+          divider.style.display = 'block';
+        });
+      }
+      
       // Reconnect to lobby
       if (!voiceChat.isFromDirectLink) {
         connectLobby();
@@ -1341,10 +1395,20 @@
     document.getElementById('changeRoomBtn').addEventListener('click', () => {
       voiceChat.leave();
       
+      // Fix Bug 1: Clear roomFromUrl variable
+      roomFromUrl = null;
+      
       // Show room input and public rooms
       const roomInputGroup = document.getElementById('roomInputGroup');
-      roomInputGroup.style.display = 'block';
+      roomInputGroup.style.display = 'grid';
       document.getElementById('changeRoomBtn').style.display = 'none';
+      
+      // Hide Join Room button
+      document.getElementById('joinRoomBtn').style.display = 'none';
+      
+      // Hide invitation message
+      document.getElementById('invitationMessage').style.display = 'none';
+      
       voiceChat.isFromDirectLink = false;
       
       // Show public rooms section
