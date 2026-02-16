@@ -695,6 +695,7 @@
         this.audioContexts = new Map();
         this.selectedMicId = null;
         this.isFromDirectLink = false;
+        this.iceCandidateQueue = new Map(); // Queue for early ICE candidates
       }
       
       generateId() {
@@ -821,12 +822,11 @@
             // Google STUN servers
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' },
             // Cloudflare STUN
             { urls: 'stun:stun.cloudflare.com:3478' },
-            // Open Relay TURN servers (free public)
+            // Twilio STUN
+            { urls: 'stun:global.stun.twilio.com:3478' },
+            // Open Relay TURN servers
             {
               urls: 'turn:openrelay.metered.ca:80',
               username: 'openrelayproject',
@@ -841,11 +841,18 @@
               urls: 'turn:openrelay.metered.ca:443?transport=tcp',
               username: 'openrelayproject',
               credential: 'openrelayproject'
+            },
+            // Numb Viagenie TURN (free, very reliable)
+            {
+              urls: 'turn:numb.viagenie.ca',
+              username: 'webrtc@live.com',
+              credential: 'muazkh'
             }
           ],
           iceCandidatePoolSize: 10,
           bundlePolicy: 'max-bundle',
-          rtcpMuxPolicy: 'require'
+          rtcpMuxPolicy: 'require',
+          iceTransportPolicy: 'all'
         });
         
         // Add local stream with encryption
@@ -860,12 +867,17 @@
         
         // Handle ICE candidates
         pc.onicecandidate = (event) => {
-          if (event.candidate && this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({
-              type: 'ice-candidate',
-              targetId: userId,
-              candidate: event.candidate
-            }));
+          if (event.candidate) {
+            console.log(`ICE candidate for ${username}:`, event.candidate.type, event.candidate.protocol, event.candidate.address);
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+              this.ws.send(JSON.stringify({
+                type: 'ice-candidate',
+                targetId: userId,
+                candidate: event.candidate
+              }));
+            }
+          } else {
+            console.log(`All ICE candidates sent for ${username}`);
           }
         };
         
@@ -902,6 +914,23 @@
         this.peers.set(userId, { pc, username });
         this.updateUsersList();
         
+        // Set a timeout for connection establishment (30 seconds)
+        const connectionTimeout = setTimeout(() => {
+          if (pc.connectionState !== 'connected') {
+            console.error(`Connection timeout with ${username} - state: ${pc.connectionState}`);
+            // Don't remove peer yet, let ICE restart handle it
+          }
+        }, 30000);
+        
+        // Clear timeout when connected
+        const originalStateChange = pc.onconnectionstatechange;
+        pc.onconnectionstatechange = () => {
+          if (pc.connectionState === 'connected') {
+            clearTimeout(connectionTimeout);
+          }
+          originalStateChange.call(this);
+        };
+        
         // If we're the initiator, create and send offer
         if (isInitiator) {
           try {
@@ -925,6 +954,22 @@
         if (peer) {
           try {
             await peer.pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+            console.log(`Set remote description from ${data.senderId}`);
+            
+            // Process any queued ICE candidates
+            if (this.iceCandidateQueue.has(data.senderId)) {
+              const queuedCandidates = this.iceCandidateQueue.get(data.senderId);
+              console.log(`Processing ${queuedCandidates.length} queued ICE candidates from ${data.senderId}`);
+              for (const candidate of queuedCandidates) {
+                try {
+                  await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch (err) {
+                  console.error('Error adding queued candidate:', err);
+                }
+              }
+              this.iceCandidateQueue.delete(data.senderId);
+            }
+            
             const answer = await peer.pc.createAnswer();
             await peer.pc.setLocalDescription(answer);
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -945,6 +990,21 @@
         if (peer) {
           try {
             await peer.pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+            console.log(`Set remote description (answer) from ${data.senderId}`);
+            
+            // Process any queued ICE candidates
+            if (this.iceCandidateQueue.has(data.senderId)) {
+              const queuedCandidates = this.iceCandidateQueue.get(data.senderId);
+              console.log(`Processing ${queuedCandidates.length} queued ICE candidates from ${data.senderId}`);
+              for (const candidate of queuedCandidates) {
+                try {
+                  await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch (err) {
+                  console.error('Error adding queued candidate:', err);
+                }
+              }
+              this.iceCandidateQueue.delete(data.senderId);
+            }
           } catch (error) {
             console.error('Error handling answer:', error);
           }
@@ -955,7 +1015,18 @@
         const peer = this.peers.get(data.senderId);
         if (peer && data.candidate) {
           try {
-            await peer.pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+            // Check if remote description is set
+            if (peer.pc.remoteDescription && peer.pc.remoteDescription.type) {
+              await peer.pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+              console.log(`Added ICE candidate from ${data.senderId}`);
+            } else {
+              // Queue the candidate until remote description is set
+              if (!this.iceCandidateQueue.has(data.senderId)) {
+                this.iceCandidateQueue.set(data.senderId, []);
+              }
+              this.iceCandidateQueue.get(data.senderId).push(data.candidate);
+              console.log(`Queued ICE candidate from ${data.senderId} (no remote description yet)`);
+            }
           } catch (error) {
             console.error('Error adding ICE candidate:', error);
           }
