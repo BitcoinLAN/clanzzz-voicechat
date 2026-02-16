@@ -647,6 +647,7 @@
       }
       
       async init(username, roomId, displayRoomId, micDeviceId = null) {
+        this.userId = this.generateId();
         this.username = username;
         this.roomId = roomId;
         this.displayRoomId = displayRoomId || roomId;
