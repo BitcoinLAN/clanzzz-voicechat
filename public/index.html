@@ -696,12 +696,14 @@
         
         this.ws.onopen = () => {
           console.log('Connected to server');
-          this.ws.send(JSON.stringify({
+          const joinMessage = {
             type: 'join',
             roomId: this.roomId,
             userId: this.userId,
             username: this.username
-          }));
+          };
+          console.log('Sending join message:', joinMessage);
+          this.ws.send(JSON.stringify(joinMessage));
           this.updateStatus('Connected', true);
           // Immediately show yourself in the user list
           this.updateUsersList();
@@ -1253,6 +1255,11 @@
       // Use the actual room name as the room ID (no hashing)
       const roomId = roomInput;
       const displayRoomId = roomInput;
+      
+      console.log('=== JOINING ROOM ===');
+      console.log('Room ID:', roomId);
+      console.log('Display Room ID:', displayRoomId);
+      console.log('Username:', username);
       
       const success = await voiceChat.init(username, roomId, displayRoomId, micDeviceId);
       
