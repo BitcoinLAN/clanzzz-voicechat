@@ -1285,36 +1285,6 @@
     
     // Start lobby connection
     connectLobby();
-    let lobbyWs = null;
-    
-    // Connect WebSocket early just for room browsing
-    function connectLobby() {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}`;
-      
-      lobbyWs = new WebSocket(wsUrl);
-      
-      lobbyWs.onopen = () => {
-        lobbyWs.send(JSON.stringify({ type: 'get-rooms' }));
-      };
-      
-      lobbyWs.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'rooms-list') {
-          voiceChat.activeRooms = data.rooms;
-          voiceChat.updateRoomsList();
-        }
-      };
-      
-      lobbyWs.onerror = () => {
-        console.log('Lobby connection error');
-      };
-    }
-    
-    // Connect to lobby if not using direct link
-    if (!roomFromUrl) {
-      connectLobby();
-    }
     
     // Populate microphone list
     async function loadMicrophones() {
