@@ -625,6 +625,21 @@
       </div>
     </main>
   </div>
+
+  <script>
+    // VoiceChat Class
+    class VoiceChat {
+      constructor() {
+        this.ws = null;
+        this.userId = null;
+        this.username = null;
+        this.roomId = null;
+        this.displayRoomId = null;
+        this.localStream = null;
+        this.peers = new Map();
+        this.audioContexts = new Map();
+        this.selectedMicId = null;
+        this.isFromDirectLink = false;
       }
       
       generateId() {
