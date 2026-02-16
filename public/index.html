@@ -665,23 +665,6 @@
       <div class="card">
         <!-- Join View -->
         <div class="view active" id="joinView">
-          <!-- Active Rooms Browser -->
-          <div id="roomsBrowser" style="margin-bottom: 2rem;">
-            <div class="section-header">
-              <h3 class="section-title">Active Rooms</h3>
-              <button class="refresh-btn" id="refreshRoomsBtn" style="background: none; border: none; cursor: pointer; color: var(--accent-primary); font-size: 1.2rem; padding: 0; width: auto;">🔄</button>
-            </div>
-            <div id="roomsList" class="rooms-list"></div>
-            <div id="noRooms" class="no-rooms" style="display: none; text-align: center; padding: 2rem; color: var(--text-secondary); font-size: 0.9rem;">
-              No active rooms. Create one below!
-            </div>
-          </div>
-          
-          <!-- Divider -->
-          <div style="text-align: center; margin: 2rem 0; color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em;">
-            Or Create New Room
-          </div>
-          
           <div class="input-group">
             <label for="username">Nickname</label>
             <input 
@@ -1305,6 +1288,42 @@
     let isJoining = false;
     let lobbyWs = null;
     
+    // Connect to server to receive room counts (before joining a room)
+    function connectLobby() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}`;
+      
+      lobbyWs = new WebSocket(wsUrl);
+      
+      lobbyWs.onopen = () => {
+        console.log('Lobby connected');
+      };
+      
+      lobbyWs.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'room-counts') {
+            updatePublicRoomCounts(data.counts);
+          }
+        } catch (error) {
+          console.error('Lobby message error:', error);
+        }
+      };
+      
+      lobbyWs.onerror = () => {
+        console.log('Lobby connection error, retrying...');
+        setTimeout(connectLobby, 3000);
+      };
+      
+      lobbyWs.onclose = () => {
+        console.log('Lobby disconnected');
+      };
+    }
+    
+    // Start lobby connection
+    connectLobby();
+    let lobbyWs = null;
+    
     // Connect WebSocket early just for room browsing
     function connectLobby() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -1406,6 +1425,7 @@
     // Public room click handlers
     document.querySelectorAll('.public-room-item').forEach(item => {
       item.addEventListener('click', () => {
+        console.log('Public room clicked:', item.getAttribute('data-room'));
         const username = document.getElementById('username').value.trim();
         if (!username) {
           alert('⚠️ Please enter a nickname first');
@@ -1415,6 +1435,8 @@
         
         const roomId = item.getAttribute('data-room');
         const roomName = item.querySelector('.room-name').textContent;
+        
+        console.log('Joining room:', roomId, roomName);
         
         // Set the room and join
         document.getElementById('roomId').value = roomId;
