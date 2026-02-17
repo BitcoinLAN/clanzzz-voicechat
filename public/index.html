@@ -1015,7 +1015,8 @@
         }
         
         try {
-          const response = await fetch('/api/turn-credentials');
+          const accessCode = localStorage.getItem('zzz_access_code');
+          const response = await fetch(`/api/turn-credentials?code=${encodeURIComponent(accessCode || '')}`);
           if (!response.ok) throw new Error('Failed to fetch TURN credentials');
           const data = await response.json();
           
