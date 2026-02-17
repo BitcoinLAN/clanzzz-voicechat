@@ -892,11 +892,13 @@
         this.audioContexts = new Map();
         this.selectedMicId = null;
         this.isFromDirectLink = false;
-        this.iceCandidateQueue = new Map(); // Queue for early ICE candidates
-        this.intentionalLeave = false; // Track if user left intentionally
-        this.lastRoomId = null; // Remember last room for reconnect
+        this.iceCandidateQueue = new Map();
+        this.intentionalLeave = false;
+        this.lastRoomId = null;
         this.lastDisplayRoomId = null;
         this.lastMicDeviceId = null;
+        this.isReconnecting = false; // Lock to prevent multiple simultaneous reconnects
+        this.reconnectAttempts = 0;  // Track retry count for backoff
       }
       
       generateId() {
@@ -1444,7 +1446,9 @@
                 const peersGone = this.peers.size === 0;
                 const inChatView = document.getElementById('chatView').classList.contains('active');
                 
-                if (inChatView && (wsDisconnected || peersGone)) {
+                // Only reconnect if BOTH WebSocket AND peers are gone
+                // If voice is still working (peers connected), don't disrupt it
+                if (inChatView && wsDisconnected && peersGone) {
                   this.reconnect();
                 }
               }, 1500);
@@ -1459,14 +1463,33 @@
       }
       
       async reconnect() {
+        // Lock - prevent multiple simultaneous reconnects
+        if (this.isReconnecting) {
+          console.log('Reconnect already in progress, skipping');
+          return;
+        }
+        this.isReconnecting = true;
+        this.reconnectAttempts++;
+        
         setConnectionStatus('connecting', 'Reconnecting...');
+        console.log(`Reconnect attempt ${this.reconnectAttempts}`);
         
         try {
+          // Fully close existing WebSocket and wait for it to close
           if (this.ws) {
-            this.ws.close();
+            const oldWs = this.ws;
             this.ws = null;
+            if (oldWs.readyState === WebSocket.OPEN || oldWs.readyState === WebSocket.CONNECTING) {
+              await new Promise(resolve => {
+                oldWs.onclose = resolve;
+                oldWs.close();
+                // Force resolve after 1s if close event doesn't fire
+                setTimeout(resolve, 1000);
+              });
+            }
           }
           
+          // Close all peer connections
           this.peers.forEach((peer) => { peer.pc.close(); });
           this.peers.clear();
           this.audioContexts.clear();
@@ -1474,6 +1497,7 @@
           document.querySelectorAll('audio[id^="audio-"]').forEach(el => el.remove());
           this.updateUsersList();
           
+          // Check mic stream
           if (this.localStream) {
             const tracks = this.localStream.getAudioTracks();
             const trackAlive = tracks.length > 0 && tracks[0].readyState === 'live';
@@ -1488,13 +1512,25 @@
             }
           }
           
+          // Exponential backoff: 0s, 1s, 2s, 4s, max 8s
+          const delay = Math.min(Math.pow(2, this.reconnectAttempts - 1) * 1000, 8000);
+          if (delay > 0) {
+            console.log(`Waiting ${delay}ms before reconnect`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+          
           this.userId = this.generateId();
           this.intentionalLeave = false;
+          this.isReconnecting = false; // Release lock before connecting
           this.connectWebSocket();
           this.setupAudioMonitoring();
           
+          // Reset attempts on success
+          this.reconnectAttempts = 0;
+          
         } catch (err) {
           console.error('Reconnect failed:', err);
+          this.isReconnecting = false; // Always release lock
           setConnectionStatus('failed', 'Connection failed');
         }
       }
@@ -1628,6 +1664,8 @@
       
       leave() {
         this.intentionalLeave = true;
+        this.isReconnecting = false;
+        this.reconnectAttempts = 0;
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           this.ws.send(JSON.stringify({ type: 'leave' }));
           this.ws.close();
