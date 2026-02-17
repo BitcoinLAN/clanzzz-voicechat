@@ -33,6 +33,36 @@ function broadcastRoomCounts() {
   });
 }
 
+// TURN credentials endpoint - generates temporary credentials
+app.get('/api/turn-credentials', async (req, res) => {
+  try {
+    const METERED_API_KEY = process.env.METERED_API_KEY || '76214b4b535deb3fcbd21125c5a722a21952';
+    
+    // Fetch temporary credentials from Metered.ca
+    const response = await fetch(
+      `https://zzz.metered.live/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`
+    );
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch TURN credentials from Metered.ca');
+    }
+    
+    const credentials = await response.json();
+    
+    // Return ICE servers in the format WebRTC expects
+    res.json({ iceServers: credentials });
+  } catch (error) {
+    console.error('Error fetching TURN credentials:', error);
+    // Return basic STUN servers as fallback
+    res.json({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+  }
+});
+
 // Serve static files
 app.use(express.static('public'));
 
