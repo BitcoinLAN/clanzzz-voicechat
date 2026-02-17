@@ -979,20 +979,59 @@
           case 'ice-candidate':
             await this.handleIceCandidate(data);
             break;
-            
-          case 'chat-message':
-            this.displayChatMessage(data.username, data.text, false);
-            break;
         }
       }
       
+      setupDataChannel(dataChannel, userId, username) {
+        dataChannel.onopen = () => {
+          console.log(`Data channel open with ${username}`);
+        };
+        
+        dataChannel.onclose = () => {
+          console.log(`Data channel closed with ${username}`);
+        };
+        
+        dataChannel.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'chat-message') {
+              this.displayChatMessage(data.username, data.text, false);
+            }
+          } catch (err) {
+            console.error('Error parsing data channel message:', err);
+          }
+        };
+        
+        dataChannel.onerror = (err) => {
+          console.error(`Data channel error with ${username}:`, err);
+        };
+      }
+      
       sendChatMessage(text) {
-        if (!text.trim() || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-        this.ws.send(JSON.stringify({
+        if (!text.trim()) return;
+        
+        const message = JSON.stringify({
           type: 'chat-message',
+          username: this.username,
           text: text.trim()
-        }));
-        this.displayChatMessage(this.username, text.trim(), true);
+        });
+        
+        // Send via data channel to each peer (never touches server)
+        let sentCount = 0;
+        this.peers.forEach((peer) => {
+          if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
+            peer.dataChannel.send(message);
+            sentCount++;
+          }
+        });
+        
+        if (sentCount > 0 || this.peers.size === 0) {
+          // Show own message
+          this.displayChatMessage(this.username, text.trim(), true);
+        } else {
+          console.warn('No open data channels to send message');
+          this.displayChatMessage(this.username, text.trim(), true);
+        }
       }
       
       displayChatMessage(username, text, isOwn) {
@@ -1158,14 +1197,13 @@
           }
         };
         
-        this.peers.set(userId, { pc, username });
+        this.peers.set(userId, { pc, username, dataChannel: null });
         this.updateUsersList();
         
         // Set a timeout for connection establishment (30 seconds)
         const connectionTimeout = setTimeout(() => {
           if (pc.connectionState !== 'connected') {
             console.error(`Connection timeout with ${username} - state: ${pc.connectionState}`);
-            // Don't remove peer yet, let ICE restart handle it
           }
         }, 30000);
         
@@ -1178,8 +1216,13 @@
           originalStateChange.call(this);
         };
         
-        // If we're the initiator, create and send offer
+        // If we're the initiator, create data channel and offer
         if (isInitiator) {
+          // Create data channel for chat
+          const dataChannel = pc.createDataChannel('chat', { ordered: true });
+          this.setupDataChannel(dataChannel, userId, username);
+          this.peers.get(userId).dataChannel = dataChannel;
+          
           try {
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
@@ -1193,8 +1236,15 @@
           } catch (error) {
             console.error('Error creating offer:', error);
           }
+        } else {
+          // Non-initiator: wait for data channel from remote peer
+          pc.ondatachannel = (event) => {
+            const dataChannel = event.channel;
+            this.setupDataChannel(dataChannel, userId, username);
+            const peer = this.peers.get(userId);
+            if (peer) peer.dataChannel = dataChannel;
+          };
         }
-      }
       
       async handleOffer(data) {
         const peer = this.peers.get(data.senderId);
