@@ -1625,10 +1625,12 @@
       }
     }
     
-    // Request mic permission first to get device labels
+    // Request mic permission once on load, keep stream for reuse when joining
     navigator.mediaDevices.getUserMedia({ audio: true })
       .then(stream => {
-        stream.getTracks().forEach(track => track.stop());
+        // Mute it for now - will be reused when joining a room
+        stream.getAudioTracks().forEach(track => { track.enabled = false; });
+        voiceChat.localStream = stream;
         loadMicrophones();
       })
       .catch(() => {
