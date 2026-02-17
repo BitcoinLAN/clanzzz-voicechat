@@ -837,17 +837,10 @@
         <div class="view" id="chatView">
           <div class="status-bar">
             <span class="room-info-display" id="roomInfo"></span>
-            <div class="status-indicator">
-              <div class="status-dot" id="statusDot"></div>
-              <span class="status-text" id="statusText"></span>
-            </div>
+            <span class="user-count" id="userCount">1</span>
           </div>
           
           <div class="users-section">
-            <div class="section-header">
-              <span class="section-title">In Room</span>
-              <span class="user-count" id="userCount">1</span>
-            </div>
             <div class="users-list" id="usersList"></div>
           </div>
           
@@ -1709,15 +1702,10 @@
       }
       
       updateStatus(message, isConnected) {
-        const statusDot = document.getElementById('statusDot');
         const roomInfo = document.getElementById('roomInfo');
         // statusText is kept empty - coloured banner handles connection status display
-        
         if (isConnected) {
-          statusDot.classList.add('connected');
           roomInfo.textContent = `Room: ${this.displayRoomId}`;
-        } else {
-          statusDot.classList.remove('connected');
         }
       }
       
