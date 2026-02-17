@@ -392,11 +392,12 @@
     
     .user-count {
       background: var(--gray-light-bg);
-      padding: 0.25rem 0.75rem;
+      padding: 0.375rem 0.75rem;
       border-radius: 20px;
       font-size: 0.75rem;
       font-weight: 600;
       color: var(--text-secondary);
+      line-height: 1.4;
     }
     
     .users-list {
@@ -1898,8 +1899,9 @@
         
         console.log('Joining room:', roomId, roomName);
         
-        // Set the room and join
+        // Set the room and join - store proper display name
         document.getElementById('roomId').value = roomId;
+        document.getElementById('roomId').dataset.displayName = roomName;
         document.getElementById('joinBtn').click();
       });
     });
@@ -1961,7 +1963,10 @@
       
       // Use the actual room name as the room ID (no hashing)
       const roomId = roomInput;
-      const displayRoomId = roomInput;
+      const roomIdEl = document.getElementById('roomId');
+      const displayRoomId = roomIdEl.dataset.displayName || (roomInput.charAt(0).toUpperCase() + roomInput.slice(1));
+      // Clear the stored display name after use
+      delete roomIdEl.dataset.displayName;
       
       console.log('=== JOINING ROOM ===');
       console.log('Room ID:', roomId);
