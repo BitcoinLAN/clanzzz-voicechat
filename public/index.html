@@ -1456,26 +1456,19 @@
         banner.className = 'reconnect-banner reconnecting';
         
         try {
-          // Send leave to clean up old server entry first
-          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ type: 'leave' }));
-          }
-          
-          // Close existing connections
+          // Close dead WebSocket
           if (this.ws) {
             this.ws.close();
             this.ws = null;
           }
+          
+          // Close all peer connections so they get rebuilt fresh
           this.peers.forEach((peer) => { peer.pc.close(); });
           this.peers.clear();
           this.audioContexts.clear();
           this.iceCandidateQueue.clear();
-          
-          // Remove stale audio elements
           document.querySelectorAll('audio[id^="audio-"]').forEach(el => el.remove());
-          
-          // Wait for server to process the leave before rejoining
-          await new Promise(resolve => setTimeout(resolve, 500));
+          this.updateUsersList();
           
           // Check if mic stream is still alive
           if (this.localStream) {
@@ -1483,23 +1476,21 @@
             const trackAlive = tracks.length > 0 && tracks[0].readyState === 'live';
             if (!trackAlive) {
               try {
-                const newStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                this.localStream = newStream;
+                this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
               } catch (err) {
                 console.error('Could not get mic on reconnect:', err);
               }
             } else {
-              tracks.forEach(track => { track.enabled = true; });
+              tracks.forEach(track => { track.enabled = !this.isMuted; });
             }
           }
           
-          // IMPORTANT: Reuse same userId - do NOT generate a new one
-          // This prevents duplicate entries on the server
+          // Generate fresh userId to avoid any server-side conflicts
+          this.userId = this.generateId();
           this.intentionalLeave = false;
           this.connectWebSocket();
           this.setupAudioMonitoring();
           
-          // Show reconnected banner
           banner.textContent = '✅ Reconnected!';
           banner.className = 'reconnect-banner reconnected';
           setTimeout(() => {
