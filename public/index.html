@@ -1900,7 +1900,7 @@
         }
       } else {
         btn.disabled = false;
-        btn.innerHTML = '<span class="icon">🎮</span> Join Voice Chat';
+        btn.innerHTML = 'Join Room';
       }
       
       isJoining = false;
@@ -2033,7 +2033,7 @@
       // Reset join button
       const joinBtn = document.getElementById('joinBtn');
       joinBtn.disabled = false;
-      joinBtn.innerHTML = 'Join Voice Chat';
+      joinBtn.innerHTML = 'Join Room';
     });
     
     // Change room button handler
@@ -2083,7 +2083,7 @@
       
       const joinBtn = document.getElementById('joinBtn');
       joinBtn.disabled = false;
-      joinBtn.innerHTML = 'Join Voice Chat';
+      joinBtn.innerHTML = 'Join Room';
       
       // Clear room input and focus username
       document.getElementById('roomId').value = '';
