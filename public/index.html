@@ -547,6 +547,45 @@
       align-items: flex-end;
     }
     
+    .chat-message.expiring .chat-message-text {
+      background: #ffe4e4;
+      color: var(--text-primary);
+      transition: background 0.5s ease;
+    }
+    
+    .chat-message.own.expiring .chat-message-text {
+      background: #ffb3b3;
+      color: #000000;
+    }
+    
+    .chat-message-row {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    
+    .chat-copy-btn {
+      width: auto;
+      padding: 0.2rem 0.4rem;
+      background: none;
+      border: none;
+      box-shadow: none;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      opacity: 0.5;
+      flex-shrink: 0;
+      border-radius: 4px;
+      min-width: unset;
+    }
+    
+    .chat-copy-btn:hover {
+      opacity: 1;
+      background: var(--gray-light-bg);
+      transform: none;
+      box-shadow: none;
+    }
+    
     .chat-input-row {
       display: flex;
       border-top: 1px solid var(--gray-border);
@@ -781,7 +820,7 @@
           <!-- Chat Panel -->
           <div class="chat-panel" id="chatPanel">
             <div class="chat-messages" id="chatMessages">
-              <div class="chat-empty" id="chatEmpty">No messages yet. Say something!</div>
+              <div class="chat-empty" id="chatEmpty">No messages yet. Say something! All messages vanish after 30s</div>
             </div>
             <div class="chat-input-row">
               <input type="text" class="chat-input" id="chatInput" placeholder="Type a message..." maxlength="200" autocomplete="off">
@@ -957,23 +996,61 @@
       }
       
       displayChatMessage(username, text, isOwn) {
+        const chatPanel = document.getElementById('chatPanel');
         const chatMessages = document.getElementById('chatMessages');
         const chatEmpty = document.getElementById('chatEmpty');
         if (!chatMessages) return;
+        
+        // Auto-show chat panel if a message arrives and it's hidden
+        if (!chatPanel.classList.contains('open')) {
+          chatPanel.classList.add('open');
+          document.getElementById('chatBtn').classList.add('chat-active');
+        }
         
         // Hide empty message
         if (chatEmpty) chatEmpty.style.display = 'none';
         
         const msgEl = document.createElement('div');
         msgEl.className = `chat-message${isOwn ? ' own' : ''}`;
-        msgEl.innerHTML = `
-          <div class="chat-message-name">${this.escapeHtml(username)}</div>
-          <div class="chat-message-text">${this.escapeHtml(text)}</div>
-        `;
+        
+        if (isOwn) {
+          msgEl.innerHTML = `
+            <div class="chat-message-name">${this.escapeHtml(username)}</div>
+            <div class="chat-message-row">
+              <div class="chat-message-text">${this.escapeHtml(text)}</div>
+            </div>
+          `;
+        } else {
+          msgEl.innerHTML = `
+            <div class="chat-message-name">${this.escapeHtml(username)}</div>
+            <div class="chat-message-row">
+              <div class="chat-message-text">${this.escapeHtml(text)}</div>
+              <button class="chat-copy-btn" title="Copy message">📋</button>
+            </div>
+          `;
+          // Copy button handler
+          const copyBtn = msgEl.querySelector('.chat-copy-btn');
+          copyBtn.addEventListener('click', async () => {
+            try {
+              await navigator.clipboard.writeText(text);
+              copyBtn.textContent = '✅';
+              setTimeout(() => { copyBtn.textContent = '📋'; }, 1500);
+            } catch (err) {
+              copyBtn.textContent = '✅';
+              setTimeout(() => { copyBtn.textContent = '📋'; }, 1500);
+            }
+          });
+        }
+        
         chatMessages.appendChild(msgEl);
         chatMessages.scrollTop = chatMessages.scrollHeight;
         
-        // Remove message after 20 seconds with fade
+        // Pink warning at 25 seconds (5s before disappearing)
+        setTimeout(() => {
+          msgEl.classList.add('expiring');
+        }, 25000);
+        
+        // Remove message after 30 seconds with fade
         setTimeout(() => {
           msgEl.style.transition = 'opacity 0.5s ease';
           msgEl.style.opacity = '0';
@@ -984,7 +1061,7 @@
               chatEmpty.style.display = 'block';
             }
           }, 500);
-        }, 20000);
+        }, 30000);
       }
       
       async createPeerConnection(userId, username, isInitiator) {
@@ -1785,7 +1862,7 @@
       const chatPanel = document.getElementById('chatPanel');
       chatPanel.classList.remove('open');
       document.getElementById('chatBtn').classList.remove('chat-active');
-      document.getElementById('chatMessages').innerHTML = '<div class="chat-empty" id="chatEmpty">No messages yet. Say something!</div>';
+      document.getElementById('chatMessages').innerHTML = '<div class="chat-empty" id="chatEmpty">No messages yet. Say something! All messages vanish after 30s</div>';
       document.getElementById('chatInput').value = '';
       
       // Reset join button
