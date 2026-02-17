@@ -629,30 +629,33 @@
       box-shadow: none;
     }
     
-    /* Reconnect Banner */
-    .reconnect-banner {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 1000;
-      padding: 0.75rem 1rem;
+    /* Connection Status Banner */
+    .connection-banner {
+      padding: 0.35rem 1rem;
       text-align: center;
-      font-size: 0.875rem;
-      font-weight: 600;
-      letter-spacing: -0.01em;
+      font-size: 0.75rem;
+      font-weight: 400;
+      letter-spacing: 0.01em;
+      transition: background 0.4s ease, color 0.4s ease;
     }
     
-    .reconnect-banner.reconnecting {
-      display: block;
+    .connection-banner.disconnected {
+      background: #8e8e93;
+      color: #ffffff;
+    }
+    
+    .connection-banner.connecting {
       background: #ff9500;
       color: #ffffff;
     }
     
-    .reconnect-banner.reconnected {
-      display: block;
+    .connection-banner.connected {
       background: #34c759;
+      color: #ffffff;
+    }
+    
+    .connection-banner.failed {
+      background: #ff3b30;
       color: #ffffff;
     }
     
@@ -707,12 +710,12 @@
   </style>
 </head>
 <body>
-  <div id="reconnectBanner" class="reconnect-banner"></div>
   <div class="app-container">
     <header class="header">
       <img src="logo.png" alt="ZZZ Voice" class="logo-image">
       <p class="tagline">No accounts. Just talk.</p>
     </header>
+    <div id="connectionBanner" class="connection-banner connecting">Connecting...</div>
 
     <main class="main-content">
       <div class="card">
@@ -961,6 +964,8 @@
         
         this.ws = new WebSocket(wsUrl);
         
+        setConnectionStatus('connecting', 'Connecting...');
+        
         this.ws.onopen = () => {
           console.log('Connected to server');
           const joinMessage = {
@@ -971,6 +976,7 @@
           };
           console.log('Sending join message:', joinMessage);
           this.ws.send(JSON.stringify(joinMessage));
+          setConnectionStatus('connected', 'Connected');
           this.updateStatus('Connected', true);
           // Immediately show yourself in the user list
           this.updateUsersList();
@@ -983,11 +989,13 @@
         
         this.ws.onclose = () => {
           console.log('Disconnected from server');
+          setConnectionStatus('disconnected', 'Disconnected');
           this.updateStatus('Disconnected', false);
         };
         
         this.ws.onerror = (error) => {
           console.error('WebSocket error:', error);
+          setConnectionStatus('failed', 'Connection failed');
           this.updateStatus('Connection Error', false);
         };
       }
@@ -1451,18 +1459,14 @@
       }
       
       async reconnect() {
-        const banner = document.getElementById('reconnectBanner');
-        banner.textContent = '🔄 Reconnecting...';
-        banner.className = 'reconnect-banner reconnecting';
+        setConnectionStatus('connecting', 'Reconnecting...');
         
         try {
-          // Close dead WebSocket
           if (this.ws) {
             this.ws.close();
             this.ws = null;
           }
           
-          // Close all peer connections so they get rebuilt fresh
           this.peers.forEach((peer) => { peer.pc.close(); });
           this.peers.clear();
           this.audioContexts.clear();
@@ -1470,7 +1474,6 @@
           document.querySelectorAll('audio[id^="audio-"]').forEach(el => el.remove());
           this.updateUsersList();
           
-          // Check if mic stream is still alive
           if (this.localStream) {
             const tracks = this.localStream.getAudioTracks();
             const trackAlive = tracks.length > 0 && tracks[0].readyState === 'live';
@@ -1485,22 +1488,14 @@
             }
           }
           
-          // Generate fresh userId to avoid any server-side conflicts
           this.userId = this.generateId();
           this.intentionalLeave = false;
           this.connectWebSocket();
           this.setupAudioMonitoring();
           
-          banner.textContent = '✅ Reconnected!';
-          banner.className = 'reconnect-banner reconnected';
-          setTimeout(() => {
-            banner.className = 'reconnect-banner';
-          }, 2000);
-          
         } catch (err) {
           console.error('Reconnect failed:', err);
-          banner.textContent = '❌ Reconnect failed - please refresh';
-          banner.className = 'reconnect-banner reconnecting';
+          setConnectionStatus('failed', 'Connection failed');
         }
       }
       
@@ -1671,6 +1666,13 @@
     let isJoining = false;
     let lobbyWs = null;
     
+    // Connection banner helper
+    function setConnectionStatus(state, text) {
+      const banner = document.getElementById('connectionBanner');
+      banner.className = `connection-banner ${state}`;
+      banner.textContent = text;
+    }
+    
     // Connect to server to receive room counts (before joining a room)
     function connectLobby() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -1680,6 +1682,7 @@
       
       lobbyWs.onopen = () => {
         console.log('Lobby connected');
+        setConnectionStatus('connected', 'Connected');
       };
       
       lobbyWs.onmessage = (event) => {
@@ -1695,11 +1698,13 @@
       
       lobbyWs.onerror = () => {
         console.log('Lobby connection error, retrying...');
+        setConnectionStatus('failed', 'Connection failed');
         setTimeout(connectLobby, 3000);
       };
       
       lobbyWs.onclose = () => {
         console.log('Lobby disconnected');
+        setConnectionStatus('disconnected', 'Disconnected');
       };
     }
     
@@ -1864,6 +1869,7 @@
       const btn = document.getElementById('joinBtn');
       btn.disabled = true;
       btn.innerHTML = '<span class="loading"></span> Connecting...';
+      setConnectionStatus('connecting', 'Connecting...');
       
       // Use the actual room name as the room ID (no hashing)
       const roomId = roomInput;
@@ -1971,6 +1977,7 @@
     
     document.getElementById('leaveBtn').addEventListener('click', () => {
       voiceChat.leave();
+      setConnectionStatus('connecting', 'Connecting...');
       document.getElementById('chatView').classList.remove('active');
       document.getElementById('joinView').classList.add('active');
       
