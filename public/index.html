@@ -629,6 +629,33 @@
       box-shadow: none;
     }
     
+    /* Reconnect Banner */
+    .reconnect-banner {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      padding: 0.75rem 1rem;
+      text-align: center;
+      font-size: 0.875rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    
+    .reconnect-banner.reconnecting {
+      display: block;
+      background: #ff9500;
+      color: #ffffff;
+    }
+    
+    .reconnect-banner.reconnected {
+      display: block;
+      background: #34c759;
+      color: #ffffff;
+    }
+    
     .control-btn {
       display: flex;
       align-items: center;
@@ -680,6 +707,7 @@
   </style>
 </head>
 <body>
+  <div id="reconnectBanner" class="reconnect-banner"></div>
   <div class="app-container">
     <header class="header">
       <img src="logo.png" alt="ZZZ Voice" class="logo-image">
@@ -862,6 +890,10 @@
         this.selectedMicId = null;
         this.isFromDirectLink = false;
         this.iceCandidateQueue = new Map(); // Queue for early ICE candidates
+        this.intentionalLeave = false; // Track if user left intentionally
+        this.lastRoomId = null; // Remember last room for reconnect
+        this.lastDisplayRoomId = null;
+        this.lastMicDeviceId = null;
       }
       
       generateId() {
@@ -874,6 +906,12 @@
         this.roomId = roomId;
         this.displayRoomId = displayRoomId || roomId;
         this.selectedMicId = micDeviceId;
+        this.intentionalLeave = false;
+        
+        // Save for reconnect
+        this.lastRoomId = roomId;
+        this.lastDisplayRoomId = displayRoomId || roomId;
+        this.lastMicDeviceId = micDeviceId;
         
         try {
           // Reuse existing stream if available (avoids re-asking for mic permission)
@@ -1389,19 +1427,83 @@
       }
       
       setupVisibilityHandling() {
-        // Fix for screen lock/wake - restart audio monitoring
         document.addEventListener('visibilitychange', () => {
-          if (!document.hidden && this.localStream) {
-            // Screen woke up - restart audio monitoring
-            setTimeout(() => {
-              if (this.localAudioContext && this.localAudioContext.state === 'suspended') {
-                this.localAudioContext.resume();
-              }
-              // Force refresh of user list to restart animations
-              this.updateUsersList();
-            }, 100);
+          if (!document.hidden) {
+            // User returned to the app - wait 1.5s to allow natural recovery first
+            if (this.lastRoomId && !this.intentionalLeave) {
+              setTimeout(() => {
+                const wsDisconnected = !this.ws || this.ws.readyState !== WebSocket.OPEN;
+                const peersGone = this.peers.size === 0;
+                const inChatView = document.getElementById('chatView').classList.contains('active');
+                
+                if (inChatView && (wsDisconnected || peersGone)) {
+                  this.reconnect();
+                }
+              }, 1500);
+            }
+            
+            // Resume audio context if suspended
+            if (this.localAudioContext && this.localAudioContext.state === 'suspended') {
+              this.localAudioContext.resume();
+            }
           }
         });
+      }
+      
+      async reconnect() {
+        const banner = document.getElementById('reconnectBanner');
+        banner.textContent = '🔄 Reconnecting...';
+        banner.className = 'reconnect-banner reconnecting';
+        
+        try {
+          // Close any existing connections cleanly
+          if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+          }
+          this.peers.forEach((peer) => { peer.pc.close(); });
+          this.peers.clear();
+          this.audioContexts.clear();
+          
+          // Remove any stale audio elements
+          document.querySelectorAll('audio[id^="audio-"]').forEach(el => el.remove());
+          
+          // Check if mic stream is still alive, request again if not
+          if (this.localStream) {
+            const tracks = this.localStream.getAudioTracks();
+            const trackAlive = tracks.length > 0 && tracks[0].readyState === 'live';
+            if (!trackAlive) {
+              try {
+                const newStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                this.localStream = newStream;
+              } catch (err) {
+                console.error('Could not get mic on reconnect:', err);
+              }
+            } else {
+              // Re-enable tracks
+              tracks.forEach(track => { track.enabled = true; });
+            }
+          }
+          
+          // Rejoin the room
+          this.userId = this.generateId();
+          this.intentionalLeave = false;
+          this.iceCandidateQueue.clear();
+          this.connectWebSocket();
+          this.setupAudioMonitoring();
+          
+          // Show reconnected banner
+          banner.textContent = '✅ Reconnected!';
+          banner.className = 'reconnect-banner reconnected';
+          setTimeout(() => {
+            banner.className = 'reconnect-banner';
+          }, 2000);
+          
+        } catch (err) {
+          console.error('Reconnect failed:', err);
+          banner.textContent = '❌ Reconnect failed - please refresh';
+          banner.className = 'reconnect-banner reconnecting';
+        }
       }
       
       monitorRemoteAudio(userId, stream) {
@@ -1532,6 +1634,7 @@
       }
       
       leave() {
+        this.intentionalLeave = true;
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           this.ws.send(JSON.stringify({ type: 'leave' }));
           this.ws.close();
