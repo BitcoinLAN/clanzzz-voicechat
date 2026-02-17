@@ -734,7 +734,18 @@
   </style>
 </head>
 <body>
-  <div class="app-container">
+  <!-- Access Code Gate -->
+  <div id="accessGate" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #000000; z-index: 10000; display: flex; align-items: center; justify-content: center;">
+    <div style="background: #ffffff; border-radius: 16px; padding: 2rem; max-width: 400px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+      <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem; color: #1d1d1f;">🔐 Access Required</h2>
+      <p style="color: #86868b; font-size: 0.875rem; margin-bottom: 1.5rem;">Enter your community access code</p>
+      <input type="text" id="accessCodeInput" placeholder="Enter access code" style="width: 100%; padding: 0.875rem; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 1rem; margin-bottom: 1rem;" autocomplete="off">
+      <button id="accessCodeSubmit" style="width: 100%; padding: 0.875rem; background: #000000; color: #ffffff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer;">Enter</button>
+      <div id="accessCodeError" style="color: #ff3b30; font-size: 0.875rem; margin-top: 0.75rem; display: none;"></div>
+    </div>
+  </div>
+  
+  <div class="app-container" id="mainApp" style="display: none;">
     <header class="header">
       <img src="logo.png" alt="ZZZ Voice" class="logo-image" id="logoBtn" style="cursor: pointer;">
       <p class="tagline">No accounts. Just talk.</p>
@@ -897,6 +908,78 @@
   </div>
 
   <script>
+    // Access Code Gate Logic
+    (function() {
+      const accessGate = document.getElementById('accessGate');
+      const mainApp = document.getElementById('mainApp');
+      const accessCodeInput = document.getElementById('accessCodeInput');
+      const accessCodeSubmit = document.getElementById('accessCodeSubmit');
+      const accessCodeError = document.getElementById('accessCodeError');
+      
+      async function verifyAccessCode(code) {
+        try {
+          const response = await fetch(`/api/verify-code?code=${encodeURIComponent(code)}`);
+          const data = await response.json();
+          return data.valid;
+        } catch (err) {
+          console.error('Error verifying access code:', err);
+          return false;
+        }
+      }
+      
+      async function checkAccess() {
+        // Check URL for code parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const codeFromUrl = urlParams.get('code');
+        
+        // Check localStorage for saved code
+        const savedCode = localStorage.getItem('zzz_access_code');
+        
+        const codeToVerify = codeFromUrl || savedCode;
+        
+        if (codeToVerify) {
+          const valid = await verifyAccessCode(codeToVerify);
+          if (valid) {
+            localStorage.setItem('zzz_access_code', codeToVerify);
+            mainApp.style.display = 'block';
+            return;
+          } else {
+            // Invalid code - clear it
+            localStorage.removeItem('zzz_access_code');
+          }
+        }
+        
+        // Show access gate
+        accessGate.style.display = 'flex';
+      }
+      
+      accessCodeSubmit.addEventListener('click', async () => {
+        const code = accessCodeInput.value.trim();
+        if (!code) {
+          accessCodeError.textContent = 'Please enter an access code';
+          accessCodeError.style.display = 'block';
+          return;
+        }
+        
+        const valid = await verifyAccessCode(code);
+        if (valid) {
+          localStorage.setItem('zzz_access_code', code);
+          accessGate.style.display = 'none';
+          mainApp.style.display = 'block';
+          accessCodeError.style.display = 'none';
+        } else {
+          accessCodeError.textContent = 'Invalid access code';
+          accessCodeError.style.display = 'block';
+        }
+      });
+      
+      accessCodeInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') accessCodeSubmit.click();
+      });
+      
+      checkAccess();
+    })();
+    
     // VoiceChat Class
     class VoiceChat {
       constructor() {
@@ -2003,7 +2086,8 @@
         document.getElementById('chatView').classList.add('active');
         
         // Populate share URL (uses window.location.origin so it works on any domain)
-        const shareUrl = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(roomId)}`;
+        const accessCode = localStorage.getItem('zzz_access_code');
+        const shareUrl = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(roomId)}${accessCode ? `&code=${encodeURIComponent(accessCode)}` : ''}`;
         document.getElementById('shareUrl').value = shareUrl;
         
         // Update URL with actual room name
