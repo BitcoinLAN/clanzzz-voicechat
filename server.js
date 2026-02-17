@@ -63,11 +63,57 @@ app.get('/api/turn-credentials', async (req, res) => {
   }
 });
 
+// Access code verification endpoint
+let currentAccessCode = process.env.ACCESS_CODE || 'CLAN2026';
+
+app.get('/api/verify-code', (req, res) => {
+  const code = req.query.code;
+  res.json({ valid: code === currentAccessCode });
+});
+
+// Admin password verification (password never sent to client)
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'RA5ZC8erQ5hK';
+
+app.post('/api/admin/verify', express.json(), (req, res) => {
+  const { password } = req.body;
+  res.json({ valid: password === ADMIN_PASSWORD });
+});
+
+// Get current access code (admin only)
+app.post('/api/admin/get-code', express.json(), (req, res) => {
+  const { password } = req.body;
+  if (password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  res.json({ code: currentAccessCode });
+});
+
+// Change access code (admin only)
+app.post('/api/admin/change-code', express.json(), (req, res) => {
+  const { password, newCode } = req.body;
+  
+  if (password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  if (!newCode || newCode.length < 4) {
+    return res.status(400).json({ error: 'Code must be at least 4 characters' });
+  }
+  
+  currentAccessCode = newCode;
+  console.log(`Access code changed to: ${newCode}`);
+  res.json({ success: true, code: currentAccessCode });
+});
+
 // Serve static files
 app.use(express.static('public'));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
 // Health check endpoint for Fly.io

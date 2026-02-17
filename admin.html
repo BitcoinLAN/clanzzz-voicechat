@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - ZZZ Voice</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f7;
+      color: #1d1d1f;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+    
+    .admin-container {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 2rem;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    .subtitle {
+      color: #86868b;
+      font-size: 0.875rem;
+      margin-bottom: 2rem;
+    }
+    
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    
+    label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #1d1d1f;
+    }
+    
+    input {
+      width: 100%;
+      padding: 0.875rem;
+      border: 1px solid #d2d2d7;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-family: inherit;
+    }
+    
+    input:focus {
+      outline: none;
+      border-color: #0071e3;
+      box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.1);
+    }
+    
+    button {
+      width: 100%;
+      padding: 0.875rem;
+      background: #000000;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .message {
+      padding: 0.875rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+      display: none;
+    }
+    
+    .message.success {
+      background: #d1f4e0;
+      color: #0a6e31;
+      display: block;
+    }
+    
+    .message.error {
+      background: #ffe5e5;
+      color: #c70000;
+      display: block;
+    }
+    
+    .current-code {
+      background: #f5f5f7;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+      display: none;
+    }
+    
+    .current-code.show {
+      display: block;
+    }
+    
+    .current-code-label {
+      font-size: 0.75rem;
+      color: #86868b;
+      margin-bottom: 0.25rem;
+    }
+    
+    .current-code-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      font-family: 'Courier New', monospace;
+      color: #000000;
+    }
+    
+    #loginForm, #codeForm {
+      display: none;
+    }
+    
+    #loginForm.show, #codeForm.show {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <h1>🔐 Admin Panel</h1>
+    <p class="subtitle">ZZZ Voice Access Control</p>
+    
+    <div id="message" class="message"></div>
+    
+    <!-- Login Form -->
+    <div id="loginForm" class="show">
+      <div class="form-group">
+        <label for="adminPassword">Admin Password</label>
+        <input type="password" id="adminPassword" placeholder="Enter admin password" autocomplete="off">
+      </div>
+      <button id="loginBtn">Login</button>
+    </div>
+    
+    <!-- Code Change Form -->
+    <div id="codeForm">
+      <div class="current-code" id="currentCodeDisplay">
+        <div class="current-code-label">Current Access Code</div>
+        <div class="current-code-value" id="currentCodeValue">Loading...</div>
+      </div>
+      
+      <div class="form-group">
+        <label for="newCode">New Access Code</label>
+        <input type="text" id="newCode" placeholder="Enter new code (min 4 characters)" autocomplete="off">
+      </div>
+      <button id="changeCodeBtn">Change Code</button>
+    </div>
+  </div>
+
+  <script>
+    const message = document.getElementById('message');
+    const loginForm = document.getElementById('loginForm');
+    const codeForm = document.getElementById('codeForm');
+    const currentCodeDisplay = document.getElementById('currentCodeDisplay');
+    const currentCodeValue = document.getElementById('currentCodeValue');
+    
+    let adminPassword = '';
+    
+    function showMessage(text, type) {
+      message.textContent = text;
+      message.className = `message ${type}`;
+      setTimeout(() => {
+        message.className = 'message';
+      }, 5000);
+    }
+    
+    // Login
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      const password = document.getElementById('adminPassword').value;
+      if (!password) {
+        showMessage('Please enter admin password', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/admin/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+        
+        const data = await response.json();
+        
+        if (data.valid) {
+          adminPassword = password;
+          loginForm.classList.remove('show');
+          codeForm.classList.add('show');
+          loadCurrentCode();
+        } else {
+          showMessage('Invalid admin password', 'error');
+        }
+      } catch (err) {
+        showMessage('Error verifying password', 'error');
+      }
+    });
+    
+    // Load current code
+    async function loadCurrentCode() {
+      try {
+        const response = await fetch('/api/admin/get-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: adminPassword })
+        });
+        
+        const data = await response.json();
+        
+        if (data.code) {
+          currentCodeValue.textContent = data.code;
+          currentCodeDisplay.classList.add('show');
+        }
+      } catch (err) {
+        showMessage('Error loading current code', 'error');
+      }
+    }
+    
+    // Change code
+    document.getElementById('changeCodeBtn').addEventListener('click', async () => {
+      const newCode = document.getElementById('newCode').value.trim();
+      
+      if (!newCode) {
+        showMessage('Please enter a new code', 'error');
+        return;
+      }
+      
+      if (newCode.length < 4) {
+        showMessage('Code must be at least 4 characters', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/admin/change-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: adminPassword, newCode })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          currentCodeValue.textContent = data.code;
+          document.getElementById('newCode').value = '';
+          showMessage(`Access code changed to: ${data.code}`, 'success');
+        } else {
+          showMessage(data.error || 'Failed to change code', 'error');
+        }
+      } catch (err) {
+        showMessage('Error changing code', 'error');
+      }
+    });
+    
+    // Enter key support
+    document.getElementById('adminPassword').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') document.getElementById('loginBtn').click();
+    });
+    
+    document.getElementById('newCode').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') document.getElementById('changeCodeBtn').click();
+    });
+  </script>
+</body>
+</html>
