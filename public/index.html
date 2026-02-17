@@ -533,7 +533,7 @@
   <div class="app-container">
     <header class="header">
       <img src="logo.png" alt="ZZZ Voice" class="logo-image">
-      <p class="tagline">Encrypted Peer‑to‑peer Voice Chat</p>
+      <p class="tagline">No accounts. No logs. Just talk.</p>
     </header>
 
     <main class="main-content">
@@ -606,20 +606,21 @@
           <div class="section-divider">or</div>
           
           <!-- Private Room Input and Join Button Row -->
-          <div class="input-row" id="roomInputGroup">
-            <div>
-              <label for="roomId">Create or Join a Private Room</label>
-              <input 
-                type="text" 
-                id="roomId" 
-                placeholder="Enter room name"
-                maxlength="30"
-                autocomplete="off"
-              >
-            </div>
-            <div style="display: flex; flex-direction: column;">
-              <label style="opacity: 0; user-select: none; pointer-events: none;">.</label>
-              <button id="joinBtn">Join Room</button>
+          <div id="roomInputGroup">
+            <label for="roomId" style="display: block; margin-bottom: 0.5rem; font-size: 0.8125rem; font-weight: 600; color: var(--text-primary); letter-spacing: -0.01em;">Create or Join a Private Room</label>
+            <div class="input-row" style="margin-bottom: 0;">
+              <div>
+                <input 
+                  type="text" 
+                  id="roomId" 
+                  placeholder="Enter room name"
+                  maxlength="30"
+                  autocomplete="off"
+                >
+              </div>
+              <div style="display: flex; flex-direction: column;">
+                <button id="joinBtn" style="padding: 0.875rem 1.5rem;">Join Room</button>
+              </div>
             </div>
           </div>
           
@@ -632,7 +633,7 @@
             Join a <strong>Public Room</strong> or create a <strong>Private Room</strong>
             <div class="privacy-badge">
               <span>🔒</span>
-              <span>End‑to‑end encrypted</span>
+              <span>No accounts required</span>
             </div>
           </div>
         </div>
@@ -1547,7 +1548,7 @@
         document.getElementById('changeRoomBtn').style.display = 'none';
         
         // Show room input group
-        document.getElementById('roomInputGroup').style.display = 'grid';
+        document.getElementById('roomInputGroup').style.display = 'block';
         
         // Show public rooms
         const publicRoomsGrid = document.getElementById('publicRoomsList');
@@ -1589,7 +1590,7 @@
       
       // Show room input and public rooms
       const roomInputGroup = document.getElementById('roomInputGroup');
-      roomInputGroup.style.display = 'grid';
+      roomInputGroup.style.display = 'block';
       document.getElementById('changeRoomBtn').style.display = 'none';
       
       // Hide Join Room button
