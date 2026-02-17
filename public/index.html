@@ -820,7 +820,7 @@
           <!-- Chat Panel -->
           <div class="chat-panel" id="chatPanel">
             <div class="chat-messages" id="chatMessages">
-              <div class="chat-empty" id="chatEmpty">No messages yet. Say something! All messages vanish after 30s</div>
+              <div class="chat-empty" id="chatEmpty">No messages yet. Say something!<br>All messages vanish after 30s</div>
             </div>
             <div class="chat-input-row">
               <input type="text" class="chat-input" id="chatInput" placeholder="Type a message..." maxlength="200" autocomplete="off">
@@ -1045,10 +1045,10 @@
         chatMessages.appendChild(msgEl);
         chatMessages.scrollTop = chatMessages.scrollHeight;
         
-        // Pink warning at 25 seconds (5s before disappearing)
+        // Pink warning at 27 seconds (3s before disappearing)
         setTimeout(() => {
           msgEl.classList.add('expiring');
-        }, 25000);
+        }, 27000);
         
         // Remove message after 30 seconds with fade
         setTimeout(() => {
@@ -1862,7 +1862,7 @@
       const chatPanel = document.getElementById('chatPanel');
       chatPanel.classList.remove('open');
       document.getElementById('chatBtn').classList.remove('chat-active');
-      document.getElementById('chatMessages').innerHTML = '<div class="chat-empty" id="chatEmpty">No messages yet. Say something! All messages vanish after 30s</div>';
+      document.getElementById('chatMessages').innerHTML = '<div class="chat-empty" id="chatEmpty">No messages yet. Say something!<br>All messages vanish after 30s</div>';
       document.getElementById('chatInput').value = '';
       
       // Reset join button
