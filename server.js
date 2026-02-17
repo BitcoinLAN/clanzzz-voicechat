@@ -67,6 +67,9 @@ wss.on('connection', (ws) => {
         case 'ice-candidate':
           handleSignaling(ws, data);
           break;
+        case 'chat-message':
+          handleChatMessage(ws, data);
+          break;
         case 'leave':
           handleLeave(ws);
           break;
@@ -185,6 +188,16 @@ function handleLeave(ws) {
       }
     }
   }
+}
+
+function handleChatMessage(ws, data) {
+  if (!ws.roomId || !ws.username) return;
+  // Relay to all others in room - never stored
+  broadcast(ws.roomId, {
+    type: 'chat-message',
+    username: ws.username,
+    text: data.text
+  }, ws.userId);
 }
 
 function broadcast(roomId, message, excludeUserId = null) {
