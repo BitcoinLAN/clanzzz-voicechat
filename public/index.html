@@ -876,23 +876,29 @@
         this.selectedMicId = micDeviceId;
         
         try {
-          // Get microphone access with optimized settings
-          const constraints = {
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-              sampleRate: 48000,
-              channelCount: 1
+          // Reuse existing stream if available (avoids re-asking for mic permission)
+          if (this.localStream) {
+            // Re-enable audio tracks
+            this.localStream.getAudioTracks().forEach(track => {
+              track.enabled = true;
+            });
+          } else {            // First time - request microphone access
+            const constraints = {
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                sampleRate: 48000,
+                channelCount: 1
+              }
+            };
+            
+            if (micDeviceId) {
+              constraints.audio.deviceId = { exact: micDeviceId };
             }
-          };
-          
-          // Add device ID if selected
-          if (micDeviceId) {
-            constraints.audio.deviceId = { exact: micDeviceId };
+            
+            this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
           }
-          
-          this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
           
           // Connect to signaling server
           this.connectWebSocket();
@@ -1546,8 +1552,11 @@
         }
         
         if (this.localStream) {
-          this.localStream.getTracks().forEach(track => track.stop());
-          this.localStream = null;
+          // Don't stop the stream - keep it alive for room switching
+          // Only mute it so we're not broadcasting to nobody
+          this.localStream.getAudioTracks().forEach(track => {
+            track.enabled = false;
+          });
         }
         
         this.peers.clear();
@@ -1978,9 +1987,9 @@
     
     // Prevent accidental page close
     window.addEventListener('beforeunload', (e) => {
+      // Fully stop microphone when page is closed
       if (voiceChat.localStream) {
-        e.preventDefault();
-        e.returnValue = '';
+        voiceChat.localStream.getTracks().forEach(track => track.stop());
       }
     });
   </script>
