@@ -1456,7 +1456,12 @@
         banner.className = 'reconnect-banner reconnecting';
         
         try {
-          // Close any existing connections cleanly
+          // Send leave to clean up old server entry first
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'leave' }));
+          }
+          
+          // Close existing connections
           if (this.ws) {
             this.ws.close();
             this.ws = null;
@@ -1464,11 +1469,15 @@
           this.peers.forEach((peer) => { peer.pc.close(); });
           this.peers.clear();
           this.audioContexts.clear();
+          this.iceCandidateQueue.clear();
           
-          // Remove any stale audio elements
+          // Remove stale audio elements
           document.querySelectorAll('audio[id^="audio-"]').forEach(el => el.remove());
           
-          // Check if mic stream is still alive, request again if not
+          // Wait for server to process the leave before rejoining
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Check if mic stream is still alive
           if (this.localStream) {
             const tracks = this.localStream.getAudioTracks();
             const trackAlive = tracks.length > 0 && tracks[0].readyState === 'live';
@@ -1480,15 +1489,13 @@
                 console.error('Could not get mic on reconnect:', err);
               }
             } else {
-              // Re-enable tracks
               tracks.forEach(track => { track.enabled = true; });
             }
           }
           
-          // Rejoin the room
-          this.userId = this.generateId();
+          // IMPORTANT: Reuse same userId - do NOT generate a new one
+          // This prevents duplicate entries on the server
           this.intentionalLeave = false;
-          this.iceCandidateQueue.clear();
           this.connectWebSocket();
           this.setupAudioMonitoring();
           
