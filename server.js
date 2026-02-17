@@ -118,6 +118,19 @@ function handleJoin(ws, data) {
   }
   
   const room = rooms.get(roomId);
+  
+  // If userId already exists in room (reconnect case), clean up old entry
+  if (room.has(userId)) {
+    const oldWs = room.get(userId);
+    if (oldWs !== ws) {
+      oldWs.roomId = null;
+      oldWs.userId = null;
+      if (oldWs.readyState === WebSocket.OPEN) {
+        oldWs.close();
+      }
+    }
+  }
+  
   room.set(userId, ws);
   
   // Notify others in the room
