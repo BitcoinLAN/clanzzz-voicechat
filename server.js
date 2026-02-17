@@ -138,7 +138,7 @@ function handleJoin(ws, data) {
     username
   }, userId);
   
-  console.log(`User ${username} joined room ${roomId} (${room.size} users total)`);
+  console.log(`Room ${roomId}: ${room.size} users`);
   
   // Broadcast updated room counts if it's a public room
   if (PUBLIC_ROOMS.includes(roomId)) {
@@ -167,11 +167,11 @@ function handleLeave(ws) {
     if (room) {
       room.delete(ws.userId);
       
-      console.log(`User left room ${ws.roomId} (${room.size} users remaining)`);
+      console.log(`Room: ${room.size} users remaining`);
       
       if (room.size === 0) {
         rooms.delete(ws.roomId);
-        console.log(`Room ${ws.roomId} deleted (empty)`);
+        console.log(`Room deleted (empty)`);
       } else {
         broadcast(ws.roomId, {
           type: 'user-left',
