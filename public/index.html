@@ -917,10 +917,38 @@
         this.lastMicDeviceId = null;
         this.isReconnecting = false; // Lock to prevent multiple simultaneous reconnects
         this.reconnectAttempts = 0;  // Track retry count for backoff
+        this.turnCredentials = null; // Fetched from server
+        this.turnCredentialsExpiry = null;
       }
       
       generateId() {
         return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+      }
+      
+      async getTurnCredentials() {
+        // Check if we have cached credentials that haven't expired
+        if (this.turnCredentials && this.turnCredentialsExpiry && Date.now() < this.turnCredentialsExpiry) {
+          return this.turnCredentials;
+        }
+        
+        try {
+          const response = await fetch('/api/turn-credentials');
+          if (!response.ok) throw new Error('Failed to fetch TURN credentials');
+          const data = await response.json();
+          
+          this.turnCredentials = data.iceServers;
+          // Cache for 50 minutes (credentials valid for 1 hour, refresh before expiry)
+          this.turnCredentialsExpiry = Date.now() + (50 * 60 * 1000);
+          
+          return this.turnCredentials;
+        } catch (error) {
+          console.error('Error fetching TURN credentials:', error);
+          // Return basic STUN servers as fallback
+          return [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+          ];
+        }
       }
       
       async init(username, roomId, displayRoomId, micDeviceId = null) {
@@ -1202,42 +1230,19 @@
       }
       
       async createPeerConnection(userId, username, isInitiator) {
+        // Fetch fresh TURN credentials from server
+        const iceServers = await this.getTurnCredentials();
+        
         const pc = new RTCPeerConnection({
-          iceServers: [
-            // Google STUN servers
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            // Metered.ca STUN
-            { urls: "stun:stun.relay.metered.ca:80" },
-            // Metered.ca TURN servers (your account)
-            {
-              urls: "turn:standard.relay.metered.ca:80",
-              username: "6309eb9b59b328b3da7a29b0",
-              credential: "TM9TmIXPYbthv1q3",
-            },
-            {
-              urls: "turn:standard.relay.metered.ca:80?transport=tcp",
-              username: "6309eb9b59b328b3da7a29b0",
-              credential: "TM9TmIXPYbthv1q3",
-            },
-            {
-              urls: "turn:standard.relay.metered.ca:443",
-              username: "6309eb9b59b328b3da7a29b0",
-              credential: "TM9TmIXPYbthv1q3",
-            },
-            {
-              urls: "turns:standard.relay.metered.ca:443?transport=tcp",
-              username: "6309eb9b59b328b3da7a29b0",
-              credential: "TM9TmIXPYbthv1q3",
-            }
-          ],
+          iceServers,
           iceCandidatePoolSize: 10,
           bundlePolicy: 'max-bundle',
           rtcpMuxPolicy: 'require',
           iceTransportPolicy: 'all'
         });
-        
-        console.log('Using Metered.ca TURN servers');
+          rtcpMuxPolicy: 'require',
+          iceTransportPolicy: 'all'
+        });
         
         // Add local stream with encryption
         this.localStream.getTracks().forEach(track => {
