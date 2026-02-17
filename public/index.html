@@ -318,8 +318,9 @@
     }
     
     .room-info-display {
-      font-size: 0.75rem;
-      color: var(--text-secondary);
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-primary);
     }
     
     /* Users */
@@ -838,7 +839,7 @@
             <span class="room-info-display" id="roomInfo"></span>
             <div class="status-indicator">
               <div class="status-dot" id="statusDot"></div>
-              <span class="status-text" id="statusText">Connecting...</span>
+              <span class="status-text" id="statusText"></span>
             </div>
           </div>
           
@@ -1067,6 +1068,11 @@
       setupDataChannel(dataChannel, userId, username) {
         dataChannel.onopen = () => {
           console.log(`Data channel open with ${username}`);
+          // Broadcast current mute state to the new peer immediately
+          if (this.isMuted) {
+            const muteMessage = JSON.stringify({ type: 'mute-state', isMuted: true });
+            dataChannel.send(muteMessage);
+          }
         };
         
         dataChannel.onclose = () => {
@@ -1703,11 +1709,9 @@
       }
       
       updateStatus(message, isConnected) {
-        const statusText = document.getElementById('statusText');
         const statusDot = document.getElementById('statusDot');
         const roomInfo = document.getElementById('roomInfo');
-        
-        statusText.textContent = message;
+        // statusText is kept empty - coloured banner handles connection status display
         
         if (isConnected) {
           statusDot.classList.add('connected');
