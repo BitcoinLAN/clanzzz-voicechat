@@ -468,6 +468,18 @@
       transition: opacity 0.2s ease;
     }
     
+    .mute-indicator {
+      font-size: 1rem;
+      opacity: 1;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    
     .user-item.speaking .speaking-indicator {
       opacity: 1;
     }
@@ -712,7 +724,7 @@
 <body>
   <div class="app-container">
     <header class="header">
-      <img src="logo.png" alt="ZZZ Voice" class="logo-image">
+      <img src="logo.png" alt="ZZZ Voice" class="logo-image" id="logoBtn" style="cursor: pointer;">
       <p class="tagline">No accounts. Just talk.</p>
     </header>
     <div id="connectionBanner" class="connection-banner connecting">Connecting...</div>
@@ -816,17 +828,18 @@
               <span>🔒</span>
               <span>No accounts required. Encrypted voice chat.</span>
             </div>
+            <button id="micToggleBtn" class="secondary" style="margin-top: 0.75rem; font-size: 0.8125rem; padding: 0.5rem 1rem; width: auto; display: inline-block;">🔇 Disconnect Mic</button>
           </div>
         </div>
         
         <!-- Chat View -->
         <div class="view" id="chatView">
           <div class="status-bar">
+            <span class="room-info-display" id="roomInfo"></span>
             <div class="status-indicator">
               <div class="status-dot" id="statusDot"></div>
               <span class="status-text" id="statusText">Connecting...</span>
             </div>
-            <span class="room-info-display" id="roomInfo"></span>
           </div>
           
           <div class="users-section">
@@ -921,11 +934,22 @@
         try {
           // Reuse existing stream if available (avoids re-asking for mic permission)
           if (this.localStream) {
-            // Re-enable audio tracks
-            this.localStream.getAudioTracks().forEach(track => {
-              track.enabled = true;
-            });
-          } else {            // First time - request microphone access
+            const tracks = this.localStream.getAudioTracks();
+            const trackAlive = tracks.length > 0 && tracks[0].readyState === 'live';
+            if (trackAlive) {
+              // Re-enable audio tracks
+              tracks.forEach(track => { track.enabled = true; });
+            } else {
+              // Stream was stopped (user disconnected mic on lobby) - request again
+              const constraints = { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48000, channelCount: 1 } };
+              if (micDeviceId) constraints.audio.deviceId = { exact: micDeviceId };
+              this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+              // Update button back to disconnect state
+              const btn = document.getElementById('micToggleBtn');
+              if (btn) btn.textContent = '🔇 Disconnect Mic';
+            }
+          } else {
+            // First time - request microphone access
             const constraints = {
               audio: {
                 echoCancellation: true,
@@ -935,12 +959,10 @@
                 channelCount: 1
               }
             };
-            
-            if (micDeviceId) {
-              constraints.audio.deviceId = { exact: micDeviceId };
-            }
-            
+            if (micDeviceId) constraints.audio.deviceId = { exact: micDeviceId };
             this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            const btn = document.getElementById('micToggleBtn');
+            if (btn) btn.textContent = '🔇 Disconnect Mic';
           }
           
           // Connect to signaling server
@@ -991,14 +1013,20 @@
         
         this.ws.onclose = () => {
           console.log('Disconnected from server');
-          setConnectionStatus('disconnected', 'Disconnected');
           this.updateStatus('Disconnected', false);
+          // Only show disconnected if no active peers (voice still works without WebSocket)
+          if (this.peers.size === 0) {
+            setConnectionStatus('disconnected', 'Disconnected');
+          }
         };
         
         this.ws.onerror = (error) => {
           console.error('WebSocket error:', error);
-          setConnectionStatus('failed', 'Connection failed');
           this.updateStatus('Connection Error', false);
+          // Only show failed if no active peers
+          if (this.peers.size === 0) {
+            setConnectionStatus('failed', 'Connection failed');
+          }
         };
       }
       
@@ -1050,6 +1078,12 @@
             const data = JSON.parse(event.data);
             if (data.type === 'chat-message') {
               this.displayChatMessage(data.username, data.text, false);
+            } else if (data.type === 'mute-state') {
+              const peer = this.peers.get(userId);
+              if (peer) {
+                peer.isMuted = data.isMuted;
+                this.updateUsersList();
+              }
             }
           } catch (err) {
             console.error('Error parsing data channel message:', err);
@@ -1242,12 +1276,12 @@
         // Handle connection state
         pc.onconnectionstatechange = () => {
           console.log(`Connection state with ${username}: ${pc.connectionState}`);
-          // Only remove peer if connection permanently failed, not just disconnected
           if (pc.connectionState === 'failed') {
             console.error(`Peer connection permanently failed with ${username}`);
             this.removePeer(userId);
           } else if (pc.connectionState === 'connected') {
             console.log(`Successfully connected to ${username}`);
+            setConnectionStatus('connected', 'Connected');
           }
         };
         
@@ -1583,6 +1617,21 @@
         this.localStream.getAudioTracks().forEach(track => {
           track.enabled = !this.isMuted;
         });
+        
+        // Broadcast mute state to all peers via data channel
+        const muteMessage = JSON.stringify({
+          type: 'mute-state',
+          isMuted: this.isMuted
+        });
+        this.peers.forEach((peer) => {
+          if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
+            peer.dataChannel.send(muteMessage);
+          }
+        });
+        
+        // Update own user list item
+        this.updateUsersList();
+        
         return this.isMuted;
       }
       
@@ -1591,6 +1640,12 @@
         if (peer) {
           peer.pc.close();
           this.peers.delete(userId);
+          
+          // If no peers left and WebSocket also down, show disconnected
+          const wsDown = !this.ws || this.ws.readyState !== WebSocket.OPEN;
+          if (this.peers.size === 0 && wsDown) {
+            setConnectionStatus('disconnected', 'Disconnected');
+          }
           
           // Close audio context safely
           const audioContext = this.audioContexts.get(userId);
@@ -1615,19 +1670,19 @@
         
         usersList.innerHTML = '';
         
-        // Add self
-        usersList.innerHTML += this.createUserItem(this.userId, this.username + ' (You)');
+        // Add self - show mute icon if muted
+        usersList.innerHTML += this.createUserItem(this.userId, this.username + ' (You)', this.isMuted);
         
         // Add peers
         this.peers.forEach((peer, userId) => {
-          usersList.innerHTML += this.createUserItem(userId, peer.username);
+          usersList.innerHTML += this.createUserItem(userId, peer.username, peer.isMuted || false);
         });
         
         // Update count: self + peers
         userCount.textContent = this.peers.size + 1;
       }
       
-      createUserItem(userId, username) {
+      createUserItem(userId, username, isMuted = false) {
         const initial = username.charAt(0).toUpperCase();
         return `
           <div class="user-item" data-user-id="${userId}">
@@ -1636,7 +1691,7 @@
               <div class="user-name">${this.escapeHtml(username)}</div>
               <div class="user-status">🔒 Encrypted</div>
             </div>
-            <div class="speaking-indicator">🎤</div>
+            ${isMuted ? '<div class="mute-indicator">🔇</div>' : '<div class="speaking-indicator">🎤</div>'}
           </div>
         `;
       }
@@ -1776,10 +1831,13 @@
         stream.getAudioTracks().forEach(track => { track.enabled = false; });
         voiceChat.localStream = stream;
         loadMicrophones();
+        // Update mic toggle button to show mic is active
+        document.getElementById('micToggleBtn').textContent = '🔇 Disconnect Mic';
       })
       .catch(() => {
         // Permission denied, load anyway
         loadMicrophones();
+        document.getElementById('micToggleBtn').textContent = '🎤 Connect Mic';
       });
     
     // Check for room in URL - support both text and numeric IDs
@@ -1949,6 +2007,51 @@
     });
     
     // Chat toggle button
+    // Logo click - leave room and go to lobby
+    document.getElementById('logoBtn').addEventListener('click', () => {
+      const inChatView = document.getElementById('chatView').classList.contains('active');
+      if (inChatView) {
+        document.getElementById('leaveBtn').click();
+      }
+    });
+    
+    // Mic toggle button on lobby page
+    document.getElementById('micToggleBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('micToggleBtn');
+      
+      if (voiceChat.localStream) {
+        const tracks = voiceChat.localStream.getAudioTracks();
+        const isActive = tracks.length > 0 && tracks[0].readyState === 'live';
+        
+        if (isActive) {
+          // Disconnect mic - stop all tracks
+          tracks.forEach(track => track.stop());
+          voiceChat.localStream = null;
+          btn.textContent = '🎤 Connect Mic';
+        } else {
+          // Reconnect mic
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getAudioTracks().forEach(track => { track.enabled = false; });
+            voiceChat.localStream = stream;
+            btn.textContent = '🔇 Disconnect Mic';
+          } catch (err) {
+            alert('⚠️ Could not access microphone');
+          }
+        }
+      } else {
+        // No stream at all - request it
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getAudioTracks().forEach(track => { track.enabled = false; });
+          voiceChat.localStream = stream;
+          btn.textContent = '🔇 Disconnect Mic';
+        } catch (err) {
+          alert('⚠️ Could not access microphone');
+        }
+      }
+    });
+    
     document.getElementById('chatBtn').addEventListener('click', () => {
       const chatPanel = document.getElementById('chatPanel');
       const chatBtn = document.getElementById('chatBtn');
