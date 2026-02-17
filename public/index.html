@@ -397,7 +397,14 @@
       font-size: 0.75rem;
       font-weight: 600;
       color: var(--text-secondary);
-      line-height: 1.4;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    
+    .user-count .user-count-icon {
+      font-size: 1rem;
+      line-height: 1;
     }
     
     .users-list {
@@ -1679,7 +1686,7 @@
         });
         
         // Update count: self + peers
-        userCount.innerHTML = `👥 ${this.peers.size + 1}`;
+        userCount.innerHTML = `<span class="user-count-icon">👥</span>${this.peers.size + 1}`;
       }
       
       createUserItem(userId, username, isMuted = false) {
