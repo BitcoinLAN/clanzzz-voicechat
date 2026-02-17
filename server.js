@@ -35,6 +35,18 @@ function broadcastRoomCounts() {
 
 // TURN credentials endpoint - generates temporary credentials
 app.get('/api/turn-credentials', async (req, res) => {
+  // Verify access code before providing TURN credentials
+  const code = req.query.code || req.headers['x-access-code'];
+  if (code !== currentAccessCode) {
+    return res.status(401).json({ 
+      error: 'Unauthorized',
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+  }
+  
   try {
     const METERED_API_KEY = process.env.METERED_API_KEY || '76214b4b535deb3fcbd21125c5a722a21952';
     
