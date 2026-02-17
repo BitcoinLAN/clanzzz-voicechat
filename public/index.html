@@ -533,7 +533,7 @@
   <div class="app-container">
     <header class="header">
       <img src="logo.png" alt="ZZZ Voice" class="logo-image">
-      <p class="tagline">No accounts. No logs. Just talk.</p>
+      <p class="tagline">No accounts. Just talk.</p>
     </header>
 
     <main class="main-content">
@@ -1360,6 +1360,10 @@
     }
     
     // Focus username input on load
+    const savedNickname = localStorage.getItem('zzz_nickname');
+    if (savedNickname) {
+      document.getElementById('username').value = savedNickname;
+    }
     document.getElementById('username').focus();
     
     // Update public room counts
@@ -1463,6 +1467,8 @@
       const success = await voiceChat.init(username, roomId, displayRoomId, micDeviceId);
       
       if (success) {
+        // Save nickname for next visit
+        localStorage.setItem('zzz_nickname', username);
         // Close lobby connection since we're now in a room
         if (lobbyWs) {
           lobbyWs.close();
