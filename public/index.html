@@ -1678,7 +1678,7 @@
         });
         
         // Update count: self + peers
-        userCount.textContent = this.peers.size + 1;
+        userCount.innerHTML = `👥 ${this.peers.size + 1}`;
       }
       
       createUserItem(userId, username, isMuted = false) {
@@ -1705,7 +1705,7 @@
         const roomInfo = document.getElementById('roomInfo');
         // statusText is kept empty - coloured banner handles connection status display
         if (isConnected) {
-          roomInfo.textContent = `Room: ${this.displayRoomId}`;
+          roomInfo.textContent = `In Room: ${this.displayRoomId.charAt(0).toUpperCase() + this.displayRoomId.slice(1)}`;
         }
       }
       
