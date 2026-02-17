@@ -475,8 +475,119 @@
     /* Controls */
     .controls {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 0.75rem;
+    }
+    
+    /* Chat Panel */
+    .chat-panel {
+      display: none;
+      flex-direction: column;
+      margin-bottom: 1rem;
+      border: 1px solid var(--gray-border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--white);
+    }
+    
+    .chat-panel.open {
+      display: flex;
+    }
+    
+    .chat-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 0.75rem;
+      min-height: 80px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .chat-message {
+      display: flex;
+      flex-direction: column;
+      gap: 0.125rem;
+      animation: fadeIn 0.2s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .chat-message-name {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    
+    .chat-message-text {
+      font-size: 0.875rem;
+      color: var(--text-primary);
+      background: var(--gray-light-bg);
+      padding: 0.4rem 0.65rem;
+      border-radius: 8px;
+      display: inline-block;
+      max-width: 100%;
+      word-break: break-word;
+    }
+    
+    .chat-message.own .chat-message-name {
+      text-align: right;
+    }
+    
+    .chat-message.own .chat-message-text {
+      background: #000000;
+      color: #ffffff;
+      align-self: flex-end;
+    }
+    
+    .chat-message.own {
+      align-items: flex-end;
+    }
+    
+    .chat-input-row {
+      display: flex;
+      border-top: 1px solid var(--gray-border);
+    }
+    
+    .chat-input {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border: none;
+      border-radius: 0;
+      font-size: 0.9375rem;
+      outline: none;
+      background: var(--white);
+    }
+    
+    .chat-send-btn {
+      width: auto;
+      padding: 0.75rem 1rem;
+      border-radius: 0;
+      font-size: 0.875rem;
+      font-weight: 600;
+      box-shadow: none;
+      border-left: 1px solid var(--gray-border);
+    }
+    
+    .chat-send-btn:hover {
+      transform: none;
+    }
+    
+    .chat-empty {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      text-align: center;
+      padding: 0.5rem;
+    }
+    
+    .control-btn.chat-active {
+      background: var(--gray-light-bg);
+      color: var(--text-primary);
+      border: 1px solid var(--gray-border);
+      box-shadow: none;
     }
     
     .control-btn {
@@ -633,7 +744,7 @@
             Join a <strong>Public Room</strong> or create a <strong>Private Room</strong>
             <div class="privacy-badge">
               <span>🔒</span>
-              <span>No accounts required</span>
+              <span>No accounts required. Encrypted voice chat.</span>
             </div>
           </div>
         </div>
@@ -667,10 +778,25 @@
             </div>
           </div>
           
+          <!-- Chat Panel -->
+          <div class="chat-panel" id="chatPanel">
+            <div class="chat-messages" id="chatMessages">
+              <div class="chat-empty" id="chatEmpty">No messages yet. Say something!</div>
+            </div>
+            <div class="chat-input-row">
+              <input type="text" class="chat-input" id="chatInput" placeholder="Type a message..." maxlength="200" autocomplete="off">
+              <button class="chat-send-btn" id="chatSendBtn">Send</button>
+            </div>
+          </div>
+          
           <div class="controls">
             <button class="control-btn" id="micBtn">
               <span class="icon">🎤</span>
               <span>Mute</span>
+            </button>
+            <button class="control-btn secondary" id="chatBtn">
+              <span class="icon">💬</span>
+              <span>Chat</span>
             </button>
             <button class="control-btn danger" id="leaveBtn">
               <span class="icon">👋</span>
@@ -814,7 +940,51 @@
           case 'ice-candidate':
             await this.handleIceCandidate(data);
             break;
+            
+          case 'chat-message':
+            this.displayChatMessage(data.username, data.text, false);
+            break;
         }
+      }
+      
+      sendChatMessage(text) {
+        if (!text.trim() || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        this.ws.send(JSON.stringify({
+          type: 'chat-message',
+          text: text.trim()
+        }));
+        this.displayChatMessage(this.username, text.trim(), true);
+      }
+      
+      displayChatMessage(username, text, isOwn) {
+        const chatMessages = document.getElementById('chatMessages');
+        const chatEmpty = document.getElementById('chatEmpty');
+        if (!chatMessages) return;
+        
+        // Hide empty message
+        if (chatEmpty) chatEmpty.style.display = 'none';
+        
+        const msgEl = document.createElement('div');
+        msgEl.className = `chat-message${isOwn ? ' own' : ''}`;
+        msgEl.innerHTML = `
+          <div class="chat-message-name">${this.escapeHtml(username)}</div>
+          <div class="chat-message-text">${this.escapeHtml(text)}</div>
+        `;
+        chatMessages.appendChild(msgEl);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        
+        // Remove message after 20 seconds with fade
+        setTimeout(() => {
+          msgEl.style.transition = 'opacity 0.5s ease';
+          msgEl.style.opacity = '0';
+          setTimeout(() => {
+            msgEl.remove();
+            // Show empty message if no messages left
+            if (chatMessages.querySelectorAll('.chat-message').length === 0 && chatEmpty) {
+              chatEmpty.style.display = 'block';
+            }
+          }, 500);
+        }, 20000);
       }
       
       async createPeerConnection(userId, username, isInitiator) {
@@ -1494,6 +1664,36 @@
       isJoining = false;
     });
     
+    // Chat toggle button
+    document.getElementById('chatBtn').addEventListener('click', () => {
+      const chatPanel = document.getElementById('chatPanel');
+      const chatBtn = document.getElementById('chatBtn');
+      const isOpen = chatPanel.classList.toggle('open');
+      if (isOpen) {
+        chatBtn.classList.add('chat-active');
+        chatBtn.innerHTML = '<span class="icon">💬</span><span>Chat</span>';
+        document.getElementById('chatInput').focus();
+      } else {
+        chatBtn.classList.remove('chat-active');
+        chatBtn.innerHTML = '<span class="icon">💬</span><span>Chat</span>';
+      }
+    });
+    
+    // Send chat message
+    function sendChat() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+      voiceChat.sendChatMessage(text);
+      input.value = '';
+    }
+    
+    document.getElementById('chatSendBtn').addEventListener('click', sendChat);
+    
+    document.getElementById('chatInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendChat();
+    });
+    
     document.getElementById('micBtn').addEventListener('click', () => {
       const isMuted = voiceChat.toggleMute();
       const btn = document.getElementById('micBtn');
@@ -1580,6 +1780,13 @@
       const micBtn = document.getElementById('micBtn');
       micBtn.innerHTML = '<span class="icon">🎤</span><span>Mute</span>';
       micBtn.classList.remove('muted');
+      
+      // Reset chat panel
+      const chatPanel = document.getElementById('chatPanel');
+      chatPanel.classList.remove('open');
+      document.getElementById('chatBtn').classList.remove('chat-active');
+      document.getElementById('chatMessages').innerHTML = '<div class="chat-empty" id="chatEmpty">No messages yet. Say something!</div>';
+      document.getElementById('chatInput').value = '';
       
       // Reset join button
       const joinBtn = document.getElementById('joinBtn');
