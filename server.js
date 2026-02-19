@@ -11,7 +11,7 @@ const wss = new WebSocket.Server({ server });
 const rooms = new Map();
 
 // Public rooms that we track
-const PUBLIC_ROOMS = ['lounge', 'counter-strike', 'league-of-legends', 'empire-earth'];
+const PUBLIC_ROOMS = ['lounge', ‘lan-party’, ’ai-studio’, ‘gaming-fps', 'gaming-moba', 'gaming-rts'];
 
 // Broadcast room counts to all waiting clients
 function broadcastRoomCounts() {
